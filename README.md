@@ -68,10 +68,25 @@ Here’s what’s next on the roadmap:
 
 ---
 
-## 🖼️ Preview  
+### ⚙️Installation & Setup
 
-*(Add your screenshots or demo GIFs here)*  
+## 1)Clone the Repository
+  git clone https://github.com/<your-username>/cerevo-dashboard.git
+  cd cerevo-dashboard
+
+## 2)Install Dependencies
+  npm install
+
+## 3)Setup Environment Variables
+## Create a .env file in the root with the following:
 ```bash
-assets/dashboard-preview.png
-assets/mindmap-preview.png
-assets/focus-meter-preview.gif
+  VITE_APPWRITE_ENDPOINT=your-appwrite-endpoint
+  VITE_APPWRITE_PROJECT=your-project-id
+  VITE_APPWRITE_DATABASE=your-database-id
+```
+
+## 4)Run the App
+```bash
+  npm run dev
+```
+## The app will start on http://localhost:5173
