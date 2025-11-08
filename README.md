@@ -90,3 +90,11 @@ Here’s what’s next on the roadmap:
   npm run dev
 ```
 ## The app will start on http://localhost:5173
+
+### 💬 Author
+#  👤 Prakhargenuine
+#  📧 prakhargenuine9336@gmail.com
+
+## “Consistency is intelligence in motion.” — Team Cerevo
+
+
