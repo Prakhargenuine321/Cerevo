@@ -1,16 +1,77 @@
-# React + Vite
+# 🧠 Cerevo — The Future of Focused Learning  
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> 🎯 A beautifully designed, motivational GATE preparation dashboard built to help students stay consistent, focused, and inspired — every single day.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🌟 Overview  
 
-## React Compiler
+**Cerevo** *(from "Cerebral Evolution")* is a modern and emotionally intelligent **study dashboard** designed for the next generation of learners.  
+It helps you organize your GATE preparation in an intuitive, visually engaging way — combining **daily task flow**, **motivation**, **smart notes**, and **mindmaps** into a single space.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Built with ❤️ using **React.js**, **Tailwind CSS**, **Framer Motion**, and **Appwrite**.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🚀 Features  
+
+### 🎯 Productivity & Planning  
+- **Task Flow System** – Create, manage, and visualize your daily learning path.  
+- **Mindmap View** – See your tasks as an animated glowing network that grows with you.  
+- **Smart Notes Timeline** – Add timestamped notes while studying; revisit moments instantly.  
+
+### 🔥 Motivation & Consistency  
+- **Motivation Feed** – Auto-updating YouTube videos to keep your energy high every 30 minutes.  
+- **Focus Meter Card** – Animated, rotating motivation bar that visually tracks your focus.  
+- **Consistency Streaks** – See your progress streaks and milestones at a glance.  
+
+### 🎨 Design & Usability  
+- **Dark Futuristic UI** – Neon gradients, glassmorphism effects, and motion animations.  
+- **Responsive Design** – Works seamlessly from 320px phones to large screens.  
+- **Smooth Animations** – Framer Motion transitions make every click feel alive.  
+
+---
+
+## 🧰 Tech Stack  
+
+| Layer | Technology |
+|-------|-------------|
+| **Frontend** | React.js |
+| **Styling** | Tailwind CSS |
+| **Animations** | Framer Motion |
+| **Backend / Auth / DB** | Appwrite |
+| **Icons & UI** | lucide-react, shadcn/ui |
+| **Motivation Feed** | YouTube iframe embeds |
+
+---
+
+## 💡 Vision  
+
+> “Study apps shouldn’t feel robotic — they should **motivate**, **guide**, and **evolve** with the learner.”
+
+Cerevo is built for students who want more than checklists.  
+It’s a dashboard that reflects **emotion, progress, and intelligence** — designed to keep you consistent throughout your journey.
+
+---
+
+## 🔮 Upcoming AI Features  
+
+We’re evolving Cerevo into an **AI-augmented study platform**.  
+Here’s what’s next on the roadmap:  
+
+| Feature | Description |
+|----------|-------------|
+| 🧠 **AI Study Optimizer** | Suggests the best next topic based on your progress and time spent. |
+| 💬 **Motivation AI Chat** | A friendly in-app assistant that keeps you focused and positive. |
+| 📝 **Note Summarizer** | Converts your handwritten or long notes into smart summaries. |
+| 📊 **Progress Analyzer** | Learns from your streaks and productivity patterns. |
+
+---
+
+## 🖼️ Preview  
+
+*(Add your screenshots or demo GIFs here)*  
+```bash
+assets/dashboard-preview.png
+assets/mindmap-preview.png
+assets/focus-meter-preview.gif
