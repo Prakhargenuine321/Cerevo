@@ -91,10 +91,10 @@ Here’s what’s next on the roadmap:
 ```
 ## The app will start on http://localhost:5173
 
-### 💬 Author
-#  👤 Prakhargenuine
-#  📧 prakhargenuine9336@gmail.com
+## 💬 Author
+### 👤 Prakhargenuine
+###  📧 prakhargenuine9336@gmail.com
 
-## “Consistency is intelligence in motion.” — Team Cerevo
+### “Consistency is intelligence in motion.” — Team Cerevo
 
 
