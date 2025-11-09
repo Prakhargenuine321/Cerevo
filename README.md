@@ -71,7 +71,7 @@ Here’s what’s next on the roadmap:
 ### ⚙️Installation & Setup
 
 ## 1)Clone the Repository
-  git clone https://github.com/<your-username>/cerevo-dashboard.git
+  git clone https://github.com<your-username>/cerevo-dashboard.git
   cd cerevo-dashboard
 
 ## 2)Install Dependencies
