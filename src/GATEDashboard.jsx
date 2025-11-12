@@ -133,12 +133,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, CheckCircle2, Link as LinkIcon, TrendingUp, CalendarDays, BarChart3, ListTodo, RotateCcw, Rocket, Timer, Bug, BookOpen } from "lucide-react";
+import { Plus, CheckCircle2, Link as LinkIcon, TrendingUp, CalendarDays, BarChart3, ListTodo, RotateCcw, Rocket, Timer, Bug, BookOpen, Loader2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import MotivationCard from "@/components/MotivationCard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Mindmap from "@/Mindmap";
-import FocusMeterCard from "./components/FocusMeterCard";
+import ProfileDropdown from "@/components/ProfileDropdown";
+import LoginPrompt from "@/components/LoginPrompt";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, collection, addDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where } from "firebase/firestore";
+import { getUserData } from "./utils/getUserData";
 
 // GATE Prep Dashboard v1.1 (JSX version)
 // Complete JS (no TypeScript). Handles missing env vars safely and falls back to localStorage.
@@ -179,65 +185,165 @@ async function ensureAppwrite() {
 }
 
 // ---------------- Constants ----------------
-const SUBJECTS = [
-  "Engineering Mathematics",
-  "Digital Logic",
-  "Computer Organization",
-  "Programming & DS",
-  "Algorithms",
-  "Theory of Computation",
-  "Compiler Design",
-  "Operating Systems",
-  "Databases",
-  "Computer Networks",
-  "General",
-  "Discrete Mathematics",
-];
+const EXAM_SUBJECTS = {
+  GATE: [
+    "Engineering Mathematics",
+    "Digital Logic",
+    "Computer Organization",
+    "Programming & DS",
+    "Algorithms",
+    "Theory of Computation",
+    "Compiler Design",
+    "Operating Systems",
+    "Databases",
+    "Computer Networks",
+    "General",
+    "Discrete Mathematics",
+  ],
+  "IIT-JEE": [
+    "Physics Class 11",
+    "Maths Class 11",
+    "Chemistry Class 11",
+    "Physics Class 12",
+    "Maths Class 12",
+    "Chemistry Class 12",
+  ],
+};
+
+// Helper function to get subjects based on exam type
+const getSubjectsForExam = (examType) => {
+  return EXAM_SUBJECTS[examType] || EXAM_SUBJECTS.GATE; // Default to GATE if exam type not found
+};
+
+// Keep SUBJECTS as a helper (will be overridden by user's exam type)
+let SUBJECTS = EXAM_SUBJECTS.GATE;
 
 // ---------------- Storage Layer ----------------
-const LS_KEY = "gate_prep_tasks_v1";
+// Tasks are now stored in Firestore in a subcollection: users/{uid}/tasks/{taskId}
 
 async function storage_list() {
-  if (await ensureAppwrite()) {
-    const res = await appwriteDB.listDocuments(ENV.DB_ID, ENV.COL_ID, []);
-    return (res?.documents || []).map((d) => ({ ...d }));
+  // Fetch from Firebase subcollection
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.warn('storage_list: No authenticated user');
+      return [];
+    }
+    console.log(`storage_list: Fetching tasks for user ${currentUser.uid}`);
+    const tasksRef = collection(db, "users", currentUser.uid, "tasks");
+    const snap = await getDocs(tasksRef);
+      const tasks = snap.docs.map(doc => ({
+        // Ensure the authoritative Firestore document id is used as `id`.
+        // Put doc.data() first, then override/add the id field with doc.id so
+        // any `id` stored inside the document data doesn't replace the
+        // real document id (which previously caused duplicate-upserts).
+        ...doc.data(),
+        id: doc.id,
+      }));
+    console.log(`storage_list: Successfully fetched ${tasks.length} tasks:`, tasks);
+    return tasks;
+  } catch (err) {
+    console.error('storage_list ERROR:', {
+      code: err.code,
+      message: err.message,
+      stack: err.stack,
+      fullError: err
+    });
+    toast.error(`Failed to load tasks: ${err.message}`);
   }
-  const raw = localStorage.getItem(LS_KEY);
-  return raw ? JSON.parse(raw) : [];
+  
+  return [];
 }
 
 async function storage_create(task) {
-  if (await ensureAppwrite()) {
-    const { ID } = await import("appwrite");
-    await appwriteDB.createDocument(ENV.DB_ID, ENV.COL_ID, task.id || ID.unique(), task);
+  // Save to Firebase subcollection using setDoc with client-side ID to ensure consistency
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('No authenticated user for create');
+    }
+    if (!task.id) {
+      throw new Error('Task must have an id before creating');
+    }
+    console.log(`storage_create: Creating task for user ${currentUser.uid}:`, task);
+    const taskRef = doc(db, "users", currentUser.uid, "tasks", task.id);
+    // Avoid storing the `id` inside the document data (it duplicates the
+    // document id and can cause confusion). Persist the task fields except
+    // the id property.
+    const { id, ...taskData } = task;
+    await setDoc(taskRef, {
+      ...taskData,
+      createdAt: new Date().toISOString(),
+    });
+    console.log(`storage_create: Task created with ID ${task.id}`);
     return;
+  } catch (err) {
+    console.error('storage_create ERROR:', {
+      code: err.code,
+      message: err.message,
+      stack: err.stack,
+      fullError: err
+    });
+    toast.error(`Failed to create task: ${err.message}`);
+    throw err;
   }
-  const list = await storage_list();
-  list.push(task);
-  localStorage.setItem(LS_KEY, JSON.stringify(list));
 }
 
 async function storage_update(id, patch) {
-  if (await ensureAppwrite()) {
-    await appwriteDB.updateDocument(ENV.DB_ID, ENV.COL_ID, id, patch);
+  // Update in Firebase subcollection
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('No authenticated user for update');
+    }
+    console.log(`storage_update: Updating task ${id} for user ${currentUser.uid}:`, patch);
+  const taskRef = doc(db, "users", currentUser.uid, "tasks", id);
+  // Use setDoc with merge to avoid failures when the document doesn't exist
+  // and to ensure partial updates are applied.
+  await setDoc(taskRef, patch, { merge: true });
+  console.log(`storage_update: Task ${id} upserted (set with merge) successfully`);
     return;
-  }
-  const list = await storage_list();
-  const idx = list.findIndex((t) => t.id === id);
-  if (idx !== -1) {
-    list[idx] = { ...list[idx], ...patch };
-    localStorage.setItem(LS_KEY, JSON.stringify(list));
+  } catch (err) {
+    console.error('storage_update ERROR:', {
+      code: err.code,
+      message: err.message,
+      stack: err.stack,
+      fullError: err
+    });
+    toast.error(`Failed to update task: ${err.message}`);
+    throw err;
   }
 }
 
 async function storage_delete(id) {
-  if (await ensureAppwrite()) {
-    await appwriteDB.deleteDocument(ENV.DB_ID, ENV.COL_ID, id);
+  // Delete from Firebase subcollection
+  try {
+    console.log('=== storage_delete START ===');
+    const currentUser = auth.currentUser;
+    console.log('Current user:', currentUser?.uid);
+    
+    if (!currentUser) {
+      throw new Error('No authenticated user for delete');
+    }
+    
+    console.log(`storage_delete: Deleting task ${id} for user ${currentUser.uid}`);
+    const taskRef = doc(db, "users", currentUser.uid, "tasks", id);
+    console.log('Task ref path:', `users/${currentUser.uid}/tasks/${id}`);
+    
+    await deleteDoc(taskRef);
+    console.log(`storage_delete: Task ${id} deleted successfully from Firebase`);
+    console.log('=== storage_delete SUCCESS ===');
     return;
+  } catch (err) {
+    console.error('=== storage_delete ERROR ===');
+    console.error('Error code:', err.code);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+    console.error('Full error object:', err);
+    
+    toast.error(`Failed to delete task: ${err.message}`);
+    throw err;
   }
-  const list = await storage_list();
-  const filtered = list.filter((t) => t.id !== id);
-  localStorage.setItem(LS_KEY, JSON.stringify(filtered));
 }
 
 // ---------------- Helpers ----------------
@@ -250,6 +356,22 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// Returns true if the task has been marked done and 6 hours have passed since completion
+function isTaskLockedByTime(task) {
+  try {
+    if (!task) return false;
+    if (task.status !== 'done') return false;
+    if (!task.completedAt) return false;
+    const completedTs = new Date(task.completedAt).getTime();
+    if (Number.isNaN(completedTs)) return false;
+    const elapsed = Date.now() - completedTs;
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    return elapsed >= SIX_HOURS;
+  } catch (e) {
+    return false;
+  }
+}
+
 function humanDate(ymd) {
   const d = new Date(ymd + "T00:00:00");
   return d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" });
@@ -258,7 +380,14 @@ function humanDate(ymd) {
 // ---------------- Component ----------------
 export default function GATEDashboard() {
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(undefined); // undefined = loading, null = not authenticated, {} = authenticated
+  const [authLoading, setAuthLoading] = useState(true);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [subjects, setSubjects] = useState(EXAM_SUBJECTS.GATE); // Track subjects based on user's exam
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(null); // tracks which task is being deleted
+  const [savingTask, setSavingTask] = useState(null); // tracks which task is being updated (mark done)
+  const [savingToastId, setSavingToastId] = useState(null);
   const [filter, setFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -276,7 +405,7 @@ export default function GATEDashboard() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      setTasksLoading(true);
       try {
         const list = await storage_list();
         setTasks(list.sort((a, b) => (a.date < b.date ? -1 : 1)));
@@ -284,31 +413,134 @@ export default function GATEDashboard() {
         console.error(e);
         toast.error("Failed to load tasks");
       } finally {
-        setLoading(false);
+        setTasksLoading(false);
       }
     })();
   }, []);
 
+  // Fetch current user's exam from Firestore `users` collection and update header
+
+
+ useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    if (!firebaseUser) {
+      setUser(null);
+      setAuthLoading(false);
+      return;
+    }
+
+    try {
+      // Ensure user document exists in Firestore (required for subcollections)
+      const userRef = doc(db, "users", firebaseUser.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        // Create default user document if it doesn't exist
+        console.log("Creating new user document for:", firebaseUser.uid);
+        await setDoc(userRef, {
+          exam: "GATE",
+          createdAt: new Date().toISOString(),
+        });
+      }
+      
+      const data = userSnap.exists() ? userSnap.data() : { exam: "GATE", createdAt: new Date().toISOString() };
+      console.log("User data:", data);
+      
+      // Update subjects based on user's exam type
+      const examType = data.exam || "GATE";
+      const updatedSubjects = getSubjectsForExam(examType);
+      setSubjects(updatedSubjects);
+      SUBJECTS = updatedSubjects;
+      console.log(`Updated SUBJECTS for exam type: ${examType}`, updatedSubjects);
+      
+      setUser({ id: firebaseUser.uid, ...data });
+      
+      // After we establish the authenticated user, refresh tasks from Firestore
+      // so the UI reflects the user's tasks immediately after sign-in.
+      try {
+        await refreshTasksFromStorage();
+      } catch (e) {
+        console.error('Failed to refresh tasks after auth change', e);
+      }
+    } catch (err) {
+      console.error("Error in auth state change:", err);
+      setUser(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
+
+
+  // useEffect(() => {
+  //   const unsub = onAuthStateChanged(auth, async (user) => {
+  //     if (!user) {
+  //       setUserExam("GATE");
+  //       return;
+  //     }
+  //     try {
+  //       // First try the common pattern: a document in `users` collection with a `userId` field
+  //       const q = query(collection(db, "users"), where("userId", "==", user.uid));
+  //       const snap = await getDocs(q);
+  //       if (!snap.empty) {
+  //         const docData = snap.docs[0].data();
+  //         console.debug('GATEDashboard: found user doc via userId field', docData);
+  //         setUserExam(docData.exam || "GATE");
+  //         return;
+  //       }
+
+  //       // Fallback: maybe the user document id is the uid (doc id == uid)
+  //       try {
+  //         const docRef = firestoreDoc(db, 'users', user.uid);
+  //         const docSnap = await getDoc(docRef);
+  //         if (docSnap && docSnap.exists()) {
+  //           const data = docSnap.data();
+  //           console.debug('GATEDashboard: found user doc by doc id', data);
+  //           setUserExam(data.exam || "GATE");
+  //           return;
+  //         }
+  //       } catch (e2) {
+  //         console.debug('GATEDashboard: fallback doc-by-id lookup failed', e2);
+  //       }
+
+  //       // nothing found — keep default
+  //       console.debug('GATEDashboard: no user document found for', user.uid);
+  //       setUserExam("GATE");
+  //     } catch (err) {
+  //       console.error("Failed to fetch user exam", err);
+  //       setUserExam("GATE");
+  //     }
+  //   });
+  //   return () => unsub();
+  // }, []);
+
   // Helper to refresh tasks from storage (authoritative source). Used after writes and when storage events
   async function refreshTasksFromStorage() {
+    console.log('refreshTasksFromStorage: Starting...');
     try {
+      console.log('refreshTasksFromStorage: Calling storage_list()');
       const list = await storage_list();
+      console.log('refreshTasksFromStorage: Received list:', list);
       setTasks(list.sort((a, b) => (a.date < b.date ? -1 : 1)));
+      console.log('refreshTasksFromStorage: Tasks state updated');
     } catch (e) {
-      console.error('Failed to refresh tasks from storage', e);
+      console.error('refreshTasksFromStorage FAILED:', e);
     }
   }
 
   // Listen for cross-window storage changes so heatmap updates in real-time across tabs
-  useEffect(() => {
-    function onStorage(e) {
-      if (e.key === LS_KEY) {
-        refreshTasksFromStorage();
-      }
-    }
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  // Note: This is disabled since we're using Firebase now (not localStorage)
+  // useEffect(() => {
+  //   function onStorage(e) {
+  //     if (e.key === LS_KEY) {
+  //       refreshTasksFromStorage();
+  //     }
+  //   }
+  //   window.addEventListener('storage', onStorage);
+  //   return () => window.removeEventListener('storage', onStorage);
+  // }, []);
 
   // Smoke tests (user-visible behavior unchanged)
   useEffect(() => {
@@ -323,6 +555,7 @@ export default function GATEDashboard() {
   }, []);
 
   async function addTask() {
+    if (isSaving) return; // prevent double submit
     if (!title.trim()) {
       toast.error("Title is required");
       return;
@@ -331,31 +564,54 @@ export default function GATEDashboard() {
     const task = {
       id: uid(),
       title: title.trim(),
-      link: link.trim() || undefined,
-      subject: subject || undefined,
-      description: description.trim() || undefined,
-      date: todayYMD(), // Always use today's date
+      link: link.trim() || null,  // null instead of undefined
+      subject: subject || null,   // null instead of undefined
+      description: description.trim() || null,  // null instead of undefined
+      date: date, // use selected date from form
       status: "pending",
       createdAt: new Date().toISOString(),
       completedAt: null,
       estimatedMinutes: estMin ? Number(estMin) : null,
       studyHours: estimatedHours,
     };
-    await storage_create(task);
-    // refresh authoritative list from storage so heatmap and other derived state stay consistent
-    await refreshTasksFromStorage();
-    setCreateOpen(false);
-    setTitle("");
-    setLink("");
-    setSubject(undefined);
-    setDescription("");
-    setEstMin("");
-    toast.success("Task created");
+    console.log('addTask: Created task object:', task);
+    setIsSaving(true);
+    try {
+      await storage_create(task);
+      // refresh authoritative list from storage so heatmap and other derived state stay consistent
+      await refreshTasksFromStorage();
+      setCreateOpen(false);
+      setTitle("");
+      setLink("");
+      setSubject(undefined);
+      setDescription("");
+      setEstMin("");
+      toast.success("Task created");
+    } catch (e) {
+      console.error('Failed to create task', e);
+      toast.error('Failed to create task');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  async function toggleTask(id, checked) {
+  async function toggleTask(id, checked, loadingToastId = null) {
     // Find existing task so we can preserve or derive study hours when marking done
     const existing = tasks.find((t) => t.id === id);
+    // If user is trying to unmark a task that was completed >6 hours ago, block it
+    if (!checked && existing && isTaskLockedByTime(existing)) {
+      console.warn(`toggleTask: Attempt to unmark locked task ${id} denied`);
+      toast.custom(
+        (t) => (
+          <div className="rounded-md bg-popover px-3 py-2 text-sm border">
+            <div className="font-semibold text-popover-foreground">Action blocked</div>
+            <div className="text-popover-foreground text-xs mt-1">This task was marked done more than 6 hours ago and cannot be unmarked.</div>
+          </div>
+        ),
+        { duration: 6000 }
+      );
+      return;
+    }
     const patch = {
       status: checked ? "done" : "pending",
       completedAt: checked ? new Date().toISOString() : null,
@@ -371,21 +627,177 @@ export default function GATEDashboard() {
       }
     }
 
-    await storage_update(id, patch);
+    // Indicate saving state for this task so UI can show spinner
+    setSavingTask(id);
+    try {
+      await storage_update(id, patch);
+    } finally {
+      setSavingTask(null);
+      // Dismiss the persistent loading toast passed from caller (if any)
+      try {
+        const idToDismiss = loadingToastId || savingToastId;
+        if (idToDismiss) {
+          toast.dismiss(idToDismiss);
+        }
+      } catch (e) {
+        // ignore
+      }
+      // Clear stored id state
+      try { setSavingToastId(null); } catch (e) {}
+    }
     // optimistic UI update first
     setTasks((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
     // then refresh from storage (authoritative) to update heatmap and across tabs
     await refreshTasksFromStorage();
+
+    // After saving, show final toast informing about 6-hour lock if task was marked done
+    if (checked) {
+      toast.custom(
+        (t) => (
+          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 p-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <div>
+                <div className="font-medium text-emerald-800 dark:text-emerald-200">Marked done</div>
+                <div className="text-xs text-emerald-700 dark:text-emerald-300">After 6 hours you will be unable to unmark, edit, or delete this task.</div>
+              </div>
+            </div>
+          </div>
+        ),
+        { duration: 6000 }
+      );
+    }
   }
 
-  async function deleteTask(id) {
-    await storage_delete(id);
-    // refresh authoritative list
-    await refreshTasksFromStorage();
-    toast.success("Task deleted");
+  // Wrapper to handle UI-level lock checks before toggling
+  function handleToggle(task, v) {
+    // if trying to uncheck (v === false) and task is locked, block
+    if (!v && isTaskLockedByTime(task)) {
+      console.warn(`handleToggle: Attempt to unmark locked task ${task.id} denied`);
+      toast.custom(
+        (t) => (
+          <div className="rounded-md bg-popover px-3 py-2 text-sm border">
+            <div className="font-semibold text-popover-foreground">Action blocked</div>
+            <div className="text-popover-foreground text-xs mt-1">This task was marked done more than 6 hours ago and cannot be unmarked.</div>
+          </div>
+        ),
+        { duration: 6000 }
+      );
+      return;
+    }
+
+    // Show immediate persistent loading toast and spinner when user clicks mark-as-done
+    const loadingMessage = v ? 'Marking done...' : 'Saving...';
+    const id = toast.loading(loadingMessage);
+    setSavingToastId(id);
+    setSavingTask(task.id);
+
+    // proceed to perform the update and pass the loading toast id so it can be dismissed
+    toggleTask(task.id, v, id);
+  }
+
+  async function deleteTask(id, taskTitle) {
+    console.log('=== DELETE TASK INITIATED ===');
+    console.log('Task ID:', id);
+    console.log('Task Title:', taskTitle);
+    // Prevent deleting if task is locked (completed > 6 hours ago)
+    const existing = tasks.find((t) => t.id === id);
+    if (existing && isTaskLockedByTime(existing)) {
+      console.warn(`deleteTask: Attempt to delete locked task ${id} denied`);
+      toast.custom(
+        (t) => (
+          <div className="rounded-md bg-popover px-3 py-2 text-sm border">
+            <div className="font-semibold text-popover-foreground">Action blocked</div>
+            <div className="text-popover-foreground text-xs mt-1">This task was marked done more than 6 hours ago and cannot be deleted.</div>
+          </div>
+        ),
+        { duration: 6000 }
+      );
+      return;
+    }
+    
+    // Show confirmation dialog with buttons
+    const confirmed = await new Promise((resolve) => {
+      console.log('Showing confirmation toast...');
+      const toastId = toast.custom(
+        (t) => (
+          <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4 shadow-lg">
+            <p className="text-sm font-medium text-red-900 dark:text-red-100 mb-3">
+              Delete "{taskTitle}"?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  console.log('Delete cancelled by user');
+                  toast.dismiss(t);
+                  resolve(false);
+                }}
+                className="px-3 py-1 text-sm rounded bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-100 hover:bg-red-300 dark:hover:bg-red-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  console.log('Delete confirmed by user, proceeding...');
+                  toast.dismiss(t);
+                  resolve(true);
+                }}
+                className="px-3 py-1 text-sm rounded bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ),
+        { duration: Infinity }
+      );
+    });
+
+    if (!confirmed) {
+      console.log(`deleteTask: User cancelled delete for task ${id}`);
+      return;
+    }
+
+    // Mark this task as deleting so UI can disable the delete button and show a spinner
+    setIsDeleting(id);
+    console.log('User confirmed deletion, showing progress toast...');
+    const progressToastId = toast.loading("Deleting task...");
+
+    try {
+      console.log(`deleteTask: Starting deletion for task ${id}`);
+      await storage_delete(id);
+      console.log(`deleteTask: storage_delete succeeded for task ${id}, refreshing tasks`);
+
+      await refreshTasksFromStorage();
+      console.log('deleteTask: Task list refreshed');
+
+      toast.dismiss(progressToastId);
+      toast.success("Task deleted successfully");
+      console.log('=== DELETE TASK COMPLETED SUCCESSFULLY ===');
+    } catch (error) {
+      console.error('=== DELETE TASK FAILED ===');
+      console.error("Delete error:", error);
+      toast.dismiss(progressToastId);
+      toast.error(`Failed to delete task: ${error.message}`);
+    } finally {
+      // ensure UI state is cleared regardless of outcome
+      setIsDeleting(null);
+    }
   }
 
   function startEditing(task) {
+    if (isTaskLockedByTime(task)) {
+      toast.custom(
+        (t) => (
+          <div className="rounded-md bg-popover px-3 py-2 text-sm border">
+            <div className="font-semibold text-popover-foreground">Action blocked</div>
+            <div className="text-popover-foreground text-xs mt-1">This task was marked done more than 6 hours ago and cannot be edited.</div>
+          </div>
+        ),
+        { duration: 6000 }
+      );
+      return;
+    }
     setEditingTask(task);
     setTitle(task.title);
     setLink(task.link || "");
@@ -401,22 +813,38 @@ export default function GATEDashboard() {
       toast.error("Title is required");
       return;
     }
-    const updatedTask = {
-      ...editingTask,
-      title: title.trim(),
-      link: link.trim() || undefined,
-      subject: subject || undefined,
-      description: description.trim() || undefined,
-      date,
-      estimatedMinutes: estMin ? Number(estMin) : null,
-    };
-    await storage_update(editingTask.id, updatedTask);
-    // refresh authoritative list
-    await refreshTasksFromStorage();
-    setCreateOpen(false);
-    setEditingTask(null);
-    resetForm();
-    toast.success("Task updated");
+    if (isSaving) {
+      return; // Prevent concurrent updates
+    }
+    setIsSaving(true);
+    try {
+      // Build patch WITHOUT the id field (Firestore doesn't allow updating document id)
+      const updatedTask = {
+        title: title.trim(),
+        link: link.trim() || null,  // null instead of undefined
+        subject: subject || null,   // null instead of undefined
+        description: description.trim() || null,  // null instead of undefined
+        date,
+        estimatedMinutes: estMin ? Number(estMin) : null,
+        status: editingTask.status,  // preserve original status
+        completedAt: editingTask.completedAt,  // preserve original completedAt
+        createdAt: editingTask.createdAt,  // preserve original createdAt
+        studyHours: editingTask.studyHours,  // preserve original studyHours
+      };
+      console.log('updateTask: Updated task patch (without id):', updatedTask);
+      await storage_update(editingTask.id, updatedTask);
+      // refresh authoritative list
+      await refreshTasksFromStorage();
+      setCreateOpen(false);
+      setEditingTask(null);
+      resetForm();
+      toast.success("Task updated");
+    } catch (error) {
+      console.error("Update error:", error);
+      toast.error("Failed to update task");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function resetForm() {
@@ -430,33 +858,11 @@ export default function GATEDashboard() {
     setEstMin("");
   }
 
-  async function resetToday() {
-    const dYMD = todayYMD();
-    const todays = tasks.filter((t) => t.date === dYMD && t.status === "done");
-    await Promise.all(todays.map((t) => storage_update(t.id, { status: "pending", completedAt: null })));
-    // refresh authoritative list
-    await refreshTasksFromStorage();
-    toast("Daily checklist reset");
-  }
-
   // ---------------- Derived Data ----------------
   const today = todayYMD();
   const todaysTasks = tasks.filter((t) => t.date === today);
   const todaysDone = todaysTasks.filter((t) => t.status === "done");
   const todaysPct = todaysTasks.length ? Math.round((todaysDone.length / todaysTasks.length) * 100) : 0;
-
-  // Compute total study hours completed today.
-  // Use the task's completedAt date when available (so tasks completed today but scheduled earlier count),
-  // otherwise fall back to the task's scheduled `date`.
-  const todaysHours = tasks.reduce((acc, t) => {
-    if (t.status !== 'done') return acc;
-    const completedDay = t.completedAt ? String(t.completedAt).split('T')[0] : t.date;
-    if (completedDay === today) {
-      const hours = t.studyHours ?? (t.estimatedMinutes ? Number(t.estimatedMinutes) / 60 : 0);
-      return acc + (isFinite(hours) ? hours : 0);
-    }
-    return acc;
-  }, 0);
 
   const overallDone = tasks.filter((t) => t.status === "done").length;
   const overallPct = tasks.length ? Math.round((overallDone / tasks.length) * 100) : 0;
@@ -507,23 +913,6 @@ export default function GATEDashboard() {
     if (count <= 6) return '#f59e0b';        // Amber/Orange (5-6 tasks)
     if (count <= 9) return '#ef4444';        // Light red (7-9 tasks)
     return '#b91c1c';                        // Dark red (10+ tasks)
-
-    // Helper functions for color interpolation
-    const hexToRgb = (h) => {
-      if (!h || typeof h !== 'string') return [255, 255, 255];
-      const s = h.replace('#', '');
-      const parts = s.match(/.{1,2}/g);
-      if (!parts || parts.length < 3) return [255, 255, 255];
-      return parts.map(x => Number.parseInt(x, 16));
-    };
-    const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => {
-      const n = Number.isFinite(x) ? Math.max(0, Math.min(255, Math.round(x))) : 0;
-      return n.toString(16).padStart(2, '0');
-    }).join('');
-    const lerp = (a, b, t) => {
-      const tt = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
-      return Math.round(a + (b - a) * tt);
-    };
 
     // Color stops exactly matching the legend
     // 0% -> white/empty
@@ -669,11 +1058,67 @@ export default function GATEDashboard() {
   const GATE_END_DATE = new Date('2026-02-07');
   const TOTAL_JOURNEY_DAYS = Math.ceil((GATE_END_DATE - GATE_START_DATE) / (1000 * 60 * 60 * 24));
 
+  //Extracting months, days and years from firebase fetched user-data
+  // Extract and normalize exam date (stored in Firestore as string 'YYYY-MM-DD' or as Date)
+  const rawExamDate = user?.examDate;
+
+  // Helper: parse YYYY-MM-DD reliably into a Date (local midnight)
+  const parseYMD = (s) => {
+    if (typeof s !== 'string') return null;
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (Number.isNaN(y) || Number.isNaN(mo) || Number.isNaN(d)) return null;
+    // Use Date(year, monthIndex, day) to avoid timezone parsing quirks of Date(string)
+    return new Date(y, mo - 1, d);
+  };
+
+  let examDateObj = null;
+  if (!rawExamDate) {
+    examDateObj = null;
+  } else if (rawExamDate instanceof Date) {
+    examDateObj = rawExamDate;
+  } else if (typeof rawExamDate === 'string') {
+    examDateObj = parseYMD(rawExamDate) || (isNaN(Date.parse(rawExamDate)) ? null : new Date(rawExamDate));
+  } else {
+    // unexpected shape
+    try {
+      examDateObj = new Date(rawExamDate);
+      if (Number.isNaN(examDateObj.getTime())) examDateObj = null;
+    } catch (e) {
+      examDateObj = null;
+    }
+  }
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const day = examDateObj ? String(examDateObj.getDate()).padStart(2, "0") : "--";
+  const month = examDateObj ? String(examDateObj.getMonth() + 1).padStart(2, "0") : "--"; // +1 because 0 = Jan
+  const year = examDateObj ? examDateObj.getFullYear() : "----";
+  const monthName = examDateObj ? monthNames[examDateObj.getMonth()] : "";
+
+//Logic for timer countdown
+
   useEffect(() => {
+    // Depend on the raw exam date string and createdAt string (primitives) to avoid
+    // re-running when a new Date object is created each render.
     function updateTimer() {
-      const gateDate = new Date('2026-02-07T09:00:00+05:30'); // GATE 2026 start time (IST)
-      const now = new Date();
-      const diff = gateDate - now;
+      // Re-parse exam date from the raw string inside the effect
+      const parsedExam = rawExamDate ? parseYMD(rawExamDate) || (isNaN(Date.parse(rawExamDate)) ? null : new Date(rawExamDate)) : null;
+      const gateDateMs = parsedExam ? parsedExam.getTime() : null;
+
+      if (!gateDateMs) {
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      // Live countdown from now until exam date
+      let diff = gateDateMs - Date.now();
 
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -686,7 +1131,11 @@ export default function GATEDashboard() {
     updateTimer(); // Initial update
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [rawExamDate]);
+
+if (authLoading) return <LoadingSpinner />;
+if (user === null) return <LoginPrompt />;
+
 
   return (
     <div className="min-h-screen bg-background transition-colors dark:bg-slate-950 p-4 md:p-8">
@@ -694,8 +1143,8 @@ export default function GATEDashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 md:gap-40">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">GATE Prep Dashboard</h1>
-            <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1"><CalendarDays className="h-4 w-4" /> {humanDate(today)} • Prakhar Patel</p>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{user?.exam?.toUpperCase?.() || "_"} Prep Dashboard</h1>
+            <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1"><CalendarDays className="h-4 w-4" /> {humanDate(today)} • {user?.name || "Guest"}</p>
           </div>
           <div
             className="
@@ -708,7 +1157,7 @@ export default function GATEDashboard() {
               <ThemeToggle />
             </div>
 
-            {/* Streak Badge */}
+            {/* Streak Badge **********************************/}
             <Badge
               variant="secondary"
               className="
@@ -822,13 +1271,24 @@ export default function GATEDashboard() {
                         <SelectValue placeholder="Select subject (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        {SUBJECTS.map((s) => (
+                        {subjects.map((s) => (
                           <SelectItem key={s} value={s}>
                             {s}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="date">Date</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="max-w-[200px]"
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -871,25 +1331,36 @@ export default function GATEDashboard() {
                     <Button
                       onClick={editingTask ? updateTask : addTask}
                       className="gap-2 w-full sm:w-auto"
+                      disabled={isSaving}
                     >
                       {editingTask ? (
+                        isSaving ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                          </>
+                        ) : (
+                          <>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                              <polyline points="17 21 17 13 7 13 7 21" />
+                              <polyline points="7 3 7 8 15 8" />
+                            </svg>
+                            Save Changes
+                          </>
+                        )
+                      ) : isSaving ? (
                         <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                            <polyline points="17 21 17 13 7 13 7 21" />
-                            <polyline points="7 3 7 8 15 8" />
-                          </svg>
-                          Save Changes
+                          <Loader2 className="h-4 w-4 animate-spin" /> Creating...
                         </>
                       ) : (
                         <>
@@ -901,6 +1372,11 @@ export default function GATEDashboard() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Profile Dropdown - Rightmost Position */}
+            <div className="shrink-0">
+              <ProfileDropdown />
+            </div>
           </div>
 
         </div>
@@ -958,13 +1434,14 @@ export default function GATEDashboard() {
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/30 group-hover:rotate-12">
                   <Timer className="h-5 w-5 text-primary transition-all duration-300 group-hover:text-primary" />
                 </div>
-                <span className="transition-colors duration-300 group-hover:text-primary">GATE 2026</span>
+                <span className="transition-colors duration-300 group-hover:text-primary">{user?.exam} {year}</span>
               </CardTitle>
               <Badge variant="secondary" className="text-sm font-normal transition-all duration-300 group-hover:bg-primary/10">
-                Feb 7th, 2026
+                {user?.examDate}
               </Badge>
             </CardHeader>
             <CardContent className="pb-5">
+              {/* Countdown Timer********************************************/}
               <div className="gate-timer flex flex-row justify-between md:justify-center items-center px-2 sm:px-4 md:px-0 gap-0.5 sm:gap-2 md:gap-4 lg:gap-8 py-3">
                 <div className="text-center min-w-14 sm:min-w-0">
                   <div className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold tabular-nums">{timeLeft.days}</div>
@@ -1168,7 +1645,7 @@ export default function GATEDashboard() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Subjects</SelectItem>
-                        {SUBJECTS.map((s) => (
+                        {subjects.map((s) => (
                           <SelectItem key={s} value={s}>{s}</SelectItem>
                         ))}
                       </SelectContent>
@@ -1178,7 +1655,7 @@ export default function GATEDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {tasksLoading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
               ) : filteredTasks.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No tasks. Click “Create Task” to add your first item.</div>
@@ -1189,10 +1666,15 @@ export default function GATEDashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="pt-0.5">
-                            <Checkbox
-                              checked={t.status === "done"}
-                              onCheckedChange={(v) => toggleTask(t.id, !!v)}
-                            />
+                            {savingTask === t.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            ) : (
+                              <Checkbox
+                                checked={t.status === "done"}
+                                onCheckedChange={(v) => handleToggle(t, !!v)}
+                                disabled={savingTask === t.id}
+                              />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <div className={`font-medium truncate ${t.status === "done" ? "text-muted-foreground line-through" : ""}`}>
@@ -1225,6 +1707,8 @@ export default function GATEDashboard() {
                             size="icon"
                             className="h-7 w-7"
                             onClick={() => startEditing(t)}
+                            disabled={isTaskLockedByTime(t)}
+                            title={isTaskLockedByTime(t) ? 'Cannot edit task after 6 hours of completion' : undefined}
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -1246,24 +1730,30 @@ export default function GATEDashboard() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            onClick={() => deleteTask(t.id)}
+                            onClick={() => deleteTask(t.id, t.title)}
+                            disabled={isDeleting === t.id || isTaskLockedByTime(t)}
+                            title={isTaskLockedByTime(t) ? 'Cannot delete task after 6 hours of completion' : undefined}
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="text-muted-foreground hover:text-destructive transition-colors"
-                            >
-                              <path d="M3 6h18" />
-                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                            </svg>
+                            {isDeleting === t.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                            ) : (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="text-muted-foreground hover:text-destructive transition-colors"
+                              >
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                              </svg>
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -1407,7 +1897,7 @@ export default function GATEDashboard() {
           </CardContent>
         </Card>
         <div className="text-xs text-muted-foreground text-center pt-2">
-          v1.1 • React + Tailwind • Appwrite optional (fallback to localStorage)
+          v1.1 • React + Tailwind • Firebase optional (fallback to localStorage)
         </div>
       </div>
     </div>

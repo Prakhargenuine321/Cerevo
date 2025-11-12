@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import YouTubePlayer from './YouTubePlayer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Clock, Save, Search } from 'lucide-react';
+import { Plus, Trash2, Clock, Save, Search, Loader2 } from 'lucide-react';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc, getDocs, collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { toast } from 'sonner';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const TASKS_LS = 'gate_prep_tasks_v1';
 const NOTES_LS = 'gate_prep_notes_v1';
@@ -100,9 +104,14 @@ function ErrorBoundary({ children }) {
 
 export default function VideoPlayer({ taskId }) {
   const [task, setTask] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [notes, setNotes] = useState({});
+  const [deletingNoteId, setDeletingNoteId] = useState(null);
+  const [cloudLoaded, setCloudLoaded] = useState({});
   const [time, setTime] = useState('00:00:00');
   const [text, setText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
   const videoRef = useRef(null);
   const [player, setPlayer] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -130,11 +139,100 @@ export default function VideoPlayer({ taskId }) {
   const [justAddedPulse, setJustAddedPulse] = useState(false);
 
   useEffect(() => {
+    console.log('VideoPlayer useEffect: taskId =', taskId);
+    
+    // Set initial loading state
+    setLoading(true);
+    setError(null);
+    
+    // First check if task is in localStorage (fallback)
     const all = loadTasks();
-    const t = all.find((x) => x.id === taskId) || null;
-    setTask(t);
-    setNotes(loadNotes());
+    const lsTask = all.find((x) => x.id === taskId) || null;
+    console.log('VideoPlayer: localStorage task =', lsTask);
+    
+    // Then try to fetch from Firebase (authoritative source)
+    const fetchFromFirebase = async () => {
+      try {
+        console.log('VideoPlayer: Attempting Firebase fetch for taskId:', taskId);
+        const currentUser = auth.currentUser;
+        console.log('VideoPlayer: currentUser =', currentUser?.uid);
+        
+        if (!currentUser) {
+          console.warn('VideoPlayer: No authenticated user, using localStorage');
+          setTask(lsTask);
+          setLoading(false);
+          if (!lsTask) setError('Task not found');
+          return;
+        }
+
+        if (!taskId) {
+          console.warn('VideoPlayer: taskId is empty/null');
+          setTask(null);
+          setLoading(false);
+          setError('Invalid task ID');
+          return;
+        }
+
+        const taskRef = doc(db, "users", currentUser.uid, "tasks", taskId);
+        console.log('VideoPlayer: Fetching from path:', `users/${currentUser.uid}/tasks/${taskId}`);
+        
+        const taskSnap = await getDoc(taskRef);
+        console.log('VideoPlayer: taskSnap exists?', taskSnap.exists());
+        
+        if (taskSnap.exists()) {
+          const fbTask = { ...taskSnap.data(), id: taskSnap.id };
+          console.log('VideoPlayer: Loaded task from Firebase:', fbTask);
+          setTask(fbTask);
+          setError(null);
+        } else {
+          console.warn('VideoPlayer: Task not found in Firebase, trying localStorage');
+          if (lsTask) {
+            setTask(lsTask);
+            setError(null);
+          } else {
+            setTask(null);
+            setError('Task not found in database');
+          }
+        }
+      } catch (error) {
+        console.error('VideoPlayer: Error fetching from Firebase:', error);
+        if (lsTask) {
+          setTask(lsTask);
+          setError(null);
+        } else {
+          setTask(null);
+          setError(error.message || 'Failed to load task');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Wait for auth to be ready, then fetch
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('VideoPlayer: onAuthStateChanged - user =', user?.uid);
+      if (user) {
+        fetchFromFirebase();
+      } else {
+        // No auth, try localStorage
+        console.warn('VideoPlayer: User not authenticated, using localStorage');
+        if (lsTask) {
+          setTask(lsTask);
+          setError(null);
+        } else {
+          setTask(null);
+          setError('Not authenticated and task not found locally');
+        }
+        setLoading(false);
+      }
+    });
+
+  // don't prefill notes from localStorage here — prefer cloud data when available
+    
+    return () => unsubscribe();
   }, [taskId]);
+
+  
 
     // (Study time tracking removed — timers no longer active)
 
@@ -168,6 +266,127 @@ export default function VideoPlayer({ taskId }) {
   // Remove enablejsapi to prevent state tracking that can cause flicker/pauses
   const embedSrc = yt ? `https://www.youtube.com/embed/${yt}?rel=0&modestbranding=1&enablejsapi=1&origin=${window.location.origin}` : link;
 
+  // Listen for cloud notes for this video (if authenticated)
+  useEffect(() => {
+    let unsub = null;
+    async function setupListener() {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (!yt) return; // nothing to listen for
+
+      try {
+        const notesCol = collection(db, 'users', user.uid, 'videoNotes');
+        const q = query(notesCol, where('videoId', '==', yt), orderBy('createdAt', 'desc'));
+
+        // fetch initial cloud data (prefer cloud over local)
+        try {
+          const snap = await getDocs(q);
+          const arr = [];
+          snap.forEach(d => {
+            const data = d.data();
+            arr.push({
+              id: d.id,
+              text: data.note || '',
+              time: data.timeStamp || '',
+              createdAt: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+            });
+          });
+          setNotes(prev => ({ ...prev, [taskId]: arr }));
+          setCloudLoaded(prev => ({ ...prev, [taskId]: true }));
+        } catch (err) {
+          console.error('Failed to fetch initial videoNotes:', err);
+          // If the query requires an index, fall back to a simpler query (no orderBy)
+          // and sort results client-side so the app keeps working without manual index creation.
+          const msg = String(err?.message || '').toLowerCase();
+          if (msg.includes('requires an index') || msg.includes('index')) {
+            try {
+              const snap2 = await getDocs(query(notesCol, where('videoId', '==', yt)));
+              const arr2 = [];
+              snap2.forEach(d => {
+                const data = d.data();
+                arr2.push({
+                  id: d.id,
+                  text: data.note || '',
+                  time: data.timeStamp || '',
+                  createdAt: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+                });
+              });
+              // sort descending by createdAt
+              arr2.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              setNotes(prev => ({ ...prev, [taskId]: arr2 }));
+              setCloudLoaded(prev => ({ ...prev, [taskId]: true }));
+            } catch (err2) {
+              console.error('Fallback fetch failed:', err2);
+            }
+          }
+        }
+
+        // then subscribe for realtime updates
+        try {
+          unsub = onSnapshot(q, (snap) => {
+            const arr = [];
+            snap.forEach(d => {
+              const data = d.data();
+              arr.push({
+                id: d.id,
+                text: data.note || '',
+                time: data.timeStamp || '',
+                createdAt: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+              });
+            });
+            setNotes(prev => ({ ...prev, [taskId]: arr }));
+            setCloudLoaded(prev => ({ ...prev, [taskId]: true }));
+          }, (err) => {
+            console.error('Failed to subscribe to videoNotes:', err);
+            const msg = String(err?.message || '').toLowerCase();
+            if (msg.includes('requires an index') || msg.includes('index')) {
+              // fallback: subscribe without orderBy and sort client-side
+              try {
+                const q2 = query(notesCol, where('videoId', '==', yt));
+                unsub = onSnapshot(q2, (snap2) => {
+                  const arr2 = [];
+                  snap2.forEach(d => {
+                    const data = d.data();
+                    arr2.push({
+                      id: d.id,
+                      text: data.note || '',
+                      time: data.timeStamp || '',
+                      createdAt: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+                    });
+                  });
+                  arr2.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                  setNotes(prev => ({ ...prev, [taskId]: arr2 }));
+                  setCloudLoaded(prev => ({ ...prev, [taskId]: true }));
+                }, (err2) => console.error('Fallback subscription failed:', err2));
+              } catch (ex) {
+                console.error('Setting up fallback subscription failed:', ex);
+              }
+            }
+          });
+        } catch (subErr) {
+          console.error('onSnapshot subscription threw:', subErr);
+        }
+      } catch (err) {
+        console.error('Error setting up notes listener:', err);
+      }
+    }
+
+    // wait for auth to be ready
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) setupListener();
+      else {
+        // if signed out, fallback to local notes for this task
+        setNotes(prev => ({ ...prev, [taskId]: loadNotes()[taskId] || [] }));
+        setCloudLoaded(prev => ({ ...prev, [taskId]: false }));
+      }
+    });
+
+    return () => {
+      try { if (unsub) unsub(); } catch (e) {}
+      try { unsubAuth(); } catch (e) {}
+    };
+  }, [yt, taskId]);
+
   // HTML5 video play/pause tracking
   useEffect(() => {
     if (!isHtml5Video || !videoRef.current) return;
@@ -182,6 +401,34 @@ export default function VideoPlayer({ taskId }) {
     };
   }, [isHtml5Video, videoRef.current]);
 
+  // Show loading spinner while fetching from Firebase
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background dark:bg-slate-950">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+          <h2 className="text-lg font-semibold">Loading task...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if task not found and loading is complete
+  if (!task && error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background dark:bg-slate-950">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold text-destructive">Task not found</h2>
+          <p className="text-sm text-muted-foreground mt-2">{error}</p>
+          <div className="mt-4">
+            <a className="inline-block px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" href="/dashboard">Go back to dashboard</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback if task is still null (shouldn't happen now)
   if (!task) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background dark:bg-slate-950">
@@ -189,7 +436,7 @@ export default function VideoPlayer({ taskId }) {
           <h2 className="text-lg font-semibold">Task not found</h2>
           <p className="text-sm text-muted-foreground mt-2">Return to dashboard and try again.</p>
           <div className="mt-4">
-            <a className="btn" href="/">Go back</a>
+            <a className="inline-block px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" href="/dashboard">Go back to dashboard</a>
           </div>
         </div>
       </div>
@@ -299,23 +546,192 @@ export default function VideoPlayer({ taskId }) {
 
   function addNote() {
     if (!text.trim()) return;
+
+    // Build note for UI/local storage (ISO timestamp for local display)
     const n = { time: time || '', text: text.trim(), createdAt: new Date().toISOString() };
-    const updated = { ...notes, [taskId]: [...taskNotes, n] };
-    setNotes(updated);
-    saveNotes(updated);
-    setText('');
-    setTime('00:00:00');
-    // pulse the add button briefly
-    setJustAddedPulse(true);
-    setTimeout(() => setJustAddedPulse(false), 700);
+
+    // show saving state & toast
+    setSavingNote(true);
+    const startedAt = Date.now();
+
+    // helper: wait briefly for onAuthStateChanged to provide a user (up to timeoutMs)
+    const waitForAuth = (timeoutMs = 4000) => {
+      return new Promise((resolve) => {
+        const current = auth.currentUser;
+        if (current) return resolve(current);
+        let resolved = false;
+        const unsubscribe = onAuthStateChanged(auth, (u) => {
+          if (!resolved) {
+            resolved = true;
+            unsubscribe();
+            resolve(u);
+          }
+        });
+        // timeout fallback
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            try { unsubscribe(); } catch (e) {}
+            resolve(null);
+          }
+        }, timeoutMs);
+      });
+    };
+
+    // show a quick toast that save started (non-blocking)
+    toast('Saving note...');
+
+    (async () => {
+      try {
+        const user = await waitForAuth(4000);
+        if (!user) {
+          // no authenticated user available
+          throw new Error('No authenticated user');
+        }
+
+        console.log('=== addNote: About to save ===');
+        console.log('User UID:', user.uid);
+        console.log('User email:', user.email);
+
+        // build payload for Firestore
+        const payload = {
+          note: n.text,
+          timeStamp: n.time,
+          videoId: yt || null,
+          videoTitle: task?.title || null,
+          userId: user.uid,
+          createdAt: serverTimestamp(),
+        };
+
+        console.log('Payload:', payload);
+        const colRef = collection(db, 'users', user.uid, 'videoNotes');
+        console.log('Collection path: users/' + user.uid + '/videoNotes');
+        const docRef = await addDoc(colRef, payload);
+        console.log('Video note saved to Firestore, id=', docRef.id);
+        toast.success('Note saved to cloud');
+
+        // Save to localStorage after successful cloud save
+        const updated = { ...notes, [taskId]: [...taskNotes, n] };
+        setNotes(updated);
+        saveNotes(updated);
+
+        // Clear inputs on success
+        setText('');
+        setTime('00:00:00');
+        setJustAddedPulse(true);
+        setTimeout(() => setJustAddedPulse(false), 700);
+      } catch (err) {
+        // No fallback: only show error toast, keep inputs so user can retry
+        console.warn('Could not save to Firestore:', err);
+        try {
+          console.warn('Firestore error details:', {
+            code: err?.code,
+            message: err?.message,
+            name: err?.name,
+            stack: err?.stack
+          });
+        } catch (ex) {
+          console.warn('Error while logging Firestore error details', ex);
+        }
+
+        toast.error('Failed saving notes try again');
+      } finally {
+        setSavingNote(false);
+      }
+    })();
   }
 
+  // Debug helper: try a single write to Firestore and log detailed result.
+  // Usage from browser console: window.testFirestoreWrite()
+  window.testFirestoreWrite = async function testFirestoreWrite() {
+    try {
+      console.log('=== testFirestoreWrite started ===');
+      console.log('auth.currentUser:', auth.currentUser);
+      console.log('db instance:', db);
+      
+      const user = auth.currentUser;
+      if (!user) { 
+        console.warn('No authenticated user'); 
+        return; 
+      }
+      
+      console.log('User UID:', user.uid);
+      console.log('User email:', user.email);
+      
+      const payload = { 
+        note: 'test note from console', 
+        timeStamp: '00:00:00', 
+        videoId: yt || null, 
+        videoTitle: task?.title || null, 
+        userId: user.uid, 
+        createdAt: serverTimestamp() 
+      };
+      
+      console.log('Payload:', payload);
+      const colRef = collection(db, 'users', user.uid, 'videoNotes');
+      console.log('Collection ref:', colRef);
+      console.log('Attempting to write...');
+      
+      const dr = await addDoc(colRef, payload);
+      console.log('✓ SUCCESS - Document written with id:', dr.id);
+    } catch (err) {
+      console.error('✗ FAILED - Error:', err);
+      console.error('Error code:', err?.code);
+      console.error('Error message:', err?.message);
+      console.error('Full error object:', err);
+    }
+  };
+
   function deleteNote(index) {
+    // Local-only deletion (remove from local cache). For cloud deletion use deleteNoteCloud
     const arr = (notes[taskId] || []).slice();
     arr.splice(index, 1);
     const updated = { ...notes, [taskId]: arr };
     setNotes(updated);
     saveNotes(updated);
+  }
+
+  async function deleteNoteCloud(noteId) {
+    if (!noteId) return;
+    
+    // Show custom toast confirmation instead of window.confirm
+    toast.custom((t) => (
+      <div className="w-full max-w-sm bg-white/10 backdrop-blur-md border border-red-500/30 rounded-lg p-4 shadow-lg">
+        <div className="text-sm font-semibold text-white mb-2">Delete Note?</div>
+        <p className="text-xs text-gray-300 mb-4">This action cannot be undone.</p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={() => toast.dismiss(t)}
+            className="px-3 py-1.5 rounded text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t);
+              try {
+                setDeletingNoteId(noteId);
+                const user = auth.currentUser;
+                if (!user) throw new Error('Not authenticated');
+                const docRef = doc(db, 'users', user.uid, 'videoNotes', noteId);
+                await deleteDoc(docRef);
+                toast.success('Note deleted');
+                // local snapshot listener will update UI; as fallback, remove from local
+                setNotes(prev => ({ ...prev, [taskId]: (prev[taskId] || []).filter(n => n.id !== noteId) }));
+              } catch (err) {
+                console.error('Failed to delete note from cloud:', err);
+                toast.error('Failed to delete note');
+              } finally {
+                setDeletingNoteId(null);
+              }
+            }}
+            className="px-3 py-1.5 rounded text-xs bg-red-600 hover:bg-red-700 text-white transition-colors font-semibold"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity })
   }
 
   return (
@@ -441,10 +857,12 @@ export default function VideoPlayer({ taskId }) {
                 <div className="mt-3 flex flex-wrap gap-2 items-center">
                   <button
                     onClick={addNote}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full font-semibold bg-linear-to-r from-[#06b6d4] to-[#8b5cf6] text-black shadow-md transform transition active:scale-95 ${justAddedPulse ? 'animate-pulse' : ''}`}
+                    disabled={savingNote}
+                    aria-busy={savingNote}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full font-semibold bg-linear-to-r from-[#06b6d4] to-[#8b5cf6] text-black shadow-md transform transition active:scale-95 ${justAddedPulse ? 'animate-pulse' : ''} ${savingNote ? 'opacity-70 cursor-wait' : ''}`}
                   >
-                    <Plus className="w-4 h-4" />
-                    Add
+                    {savingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    {savingNote ? 'Saving...' : 'Add'}
                   </button>
 
                   <button
@@ -467,7 +885,7 @@ export default function VideoPlayer({ taskId }) {
                       .filter(n => n.text.toLowerCase().includes(searchQ.toLowerCase()))
                       .map((n, idx) => (
                         <motion.li 
-                          key={idx} 
+                          key={n.id || idx} 
                           initial={{ opacity: 0, y: 8 }} 
                           animate={{ opacity: 1, y: 0 }} 
                           transition={{ duration: 0.28 }} 
@@ -483,12 +901,23 @@ export default function VideoPlayer({ taskId }) {
                             </button>
                             <div className="flex items-center gap-3">
                               <div className="text-xs text-[#94A3B8]">{new Date(n.createdAt).toLocaleString()}</div>
-                              <button 
-                                onClick={() => deleteNote(idx)} 
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400 hover:text-red-300 hover:underline"
-                              >
-                                Delete
-                              </button>
+                              {n.id ? (
+                                <button
+                                  onClick={() => deleteNoteCloud(n.id)}
+                                  disabled={deletingNoteId === n.id}
+                                  className={`opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400 hover:text-red-300 hover:underline ${deletingNoteId === n.id ? 'cursor-wait opacity-80' : ''}`}
+                                >
+                                  {deletingNoteId === n.id ? <Loader2 className="w-3 h-3 animate-spin inline-block mr-1" /> : null}
+                                  Delete
+                                </button>
+                              ) : (
+                                <button 
+                                  onClick={() => deleteNote(idx)} 
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-red-400 hover:text-red-300 hover:underline"
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -504,7 +933,7 @@ export default function VideoPlayer({ taskId }) {
           </div>
 
           <div className="col-span-12 text-center mt-6">
-            <a href="/" className="text-sm underline text-[#94A3B8]">Back to Dashboard</a>
+            <a href="/dashboard" className="text-sm underline text-[#94A3B8]">Back to Dashboard</a>
           </div>
 
           {/* Flashcard modal (unchanged logic but styled) */}

@@ -160,21 +160,7 @@ export default function Mindmap({ tasks = [], toggleTask }) {
             </div>
           </div>
 
-          {/* Scroll controls */}
-          <div className="absolute right-6 top-24 flex flex-col gap-2 z-20 scroll-controls">
-            <button
-              onClick={() => scrollBy(-200)}
-              className="w-10 h-10 rounded-md bg-slate-800/60 flex items-center justify-center ring-1 ring-slate-700 text-slate-100"
-            >
-              ▲
-            </button>
-            <button
-              onClick={() => scrollBy(200)}
-              className="w-10 h-10 rounded-md bg-slate-800/60 flex items-center justify-center ring-1 ring-slate-700 text-slate-100"
-            >
-              ▼
-            </button>
-          </div>
+          {/* Scroll controls removed per request */}
         </div>
       </div>
     </div>
