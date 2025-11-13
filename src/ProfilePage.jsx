@@ -5,7 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ResponsiveCalendar } from '@nivo/calendar';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'sonner';
-import { ArrowLeft, Camera, Edit3, Check, X, Sun, Moon, Monitor } from 'lucide-react';
+import { ArrowLeft, Camera, Edit3, Check, X, Sun, Moon, Monitor, Key, LogOut, Trash2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function CountUp({ value, duration = 800 }) {
@@ -281,11 +281,11 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = () => {
     toast.custom((t) => (
-      <div className="w-full max-w-sm bg-white/10 backdrop-blur-md border border-red-500/30 rounded-lg p-4 shadow-lg">
+      <div className="w-full max-w-sm bg-gray-900/95 dark:bg-gray-900/98 backdrop-blur-md border border-red-500/50 rounded-lg p-4 shadow-2xl">
         <div className="text-sm font-semibold text-white mb-2">Delete Account?</div>
         <p className="text-xs text-gray-300 mb-4">This will permanently remove all your data including tasks, notes, and profile. This action cannot be undone.</p>
         <div className="flex gap-2 justify-end">
-          <button onClick={() => toast.dismiss(t)} className="px-3 py-1.5 rounded text-xs bg-white/10 text-white">Cancel</button>
+          <button onClick={() => toast.dismiss(t)} className="px-3 py-1.5 rounded text-xs bg-gray-600 hover:bg-gray-500 text-white transition-colors">Cancel</button>
           <button onClick={async () => {
             toast.dismiss(t);
             const deleteLoadingToast = toast.loading('Deleting account and all data...');
@@ -318,7 +318,7 @@ export default function ProfilePage() {
               toast.dismiss(deleteLoadingToast);
               toast.error('Failed to delete account: ' + err.message);
             }
-          }} className="px-3 py-1.5 rounded text-xs bg-red-600 text-white">Delete</button>
+          }} className="px-3 py-1.5 rounded text-xs bg-red-600 hover:bg-red-700 text-white transition-colors">Delete</button>
         </div>
       </div>
     ), { duration: Infinity });
@@ -335,38 +335,53 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={() => (window.location.href = '/dashboard')} className="p-2 rounded-md bg-white/5 hover:bg-white/8">
           <ArrowLeft />
         </button>
-        <h1 className="text-2xl font-semibold">Your Profile</h1>
+        <h1 className="text-xl md:text-2xl font-semibold">Your Profile</h1>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="col-span-12 lg:col-span-4">
-          <div className="p-6 rounded-2xl bg-white/6 dark:bg-white/6 backdrop-blur-2xl border border-white/10 dark:border-white/10">
-            <div className="flex flex-col items-center">
+          <div className="relative p-6 rounded-3xl bg-gradient-to-br from-white/25 via-white/15 to-white/10 dark:from-white/15 dark:via-white/8 dark:to-white/5 backdrop-blur-3xl border border-white/30 dark:border-white/20 shadow-2xl overflow-hidden">
+            {/* Decorative background elements */}
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5 dark:from-cyan-400/10 dark:via-purple-400/10 dark:to-pink-400/10"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-cyan-400/10 to-transparent rounded-full blur-xl"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-purple-400/10 to-transparent rounded-full blur-xl"></div>
+
+            <div className="relative flex flex-col items-center z-10">
               <div className="relative">
                 {userDoc?.photoURL ? (
-                  <img src={userDoc.photoURL} alt="avatar" className="w-32 h-32 rounded-full object-cover shadow-lg" />
+                  <div className="relative">
+                    <img src={userDoc.photoURL} alt="avatar" className="w-32 h-32 rounded-full object-cover shadow-2xl ring-4 ring-white/20 dark:ring-white/10" />
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400/20 to-purple-400/20"></div>
+                  </div>
                 ) : (
-                  <div className="w-32 h-32 rounded-full flex items-center justify-center bg-linear-to-br from-[#06b6d4]/30 to-[#8b5cf6]/30 dark:from-[#06b6d4]/30 dark:to-[#8b5cf6]/30 text-white dark:text-white text-2xl font-bold">{initials}</div>
+                  <div className="w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-cyan-400/30 via-purple-400/30 to-pink-400/30 dark:from-cyan-400/40 dark:via-purple-400/40 dark:to-pink-400/40 text-white dark:text-white text-2xl font-bold shadow-2xl ring-4 ring-white/20 dark:ring-white/10">
+                    {initials}
+                  </div>
                 )}
-                <label className="absolute bottom-0 right-0 bg-white/10 dark:bg-white/10 rounded-full p-2 cursor-pointer">
-                  <Camera className="w-4 h-4" />
+                <label className="absolute bottom-0 right-0 bg-gradient-to-br from-cyan-400 to-purple-400 rounded-full p-2.5 cursor-pointer shadow-lg hover:scale-110 transition-transform duration-200">
+                  <Camera className="w-4 h-4 text-white" />
                   <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadPicture(e.target.files[0])} />
                 </label>
               </div>
-              <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">{userDoc?.name || 'Unnamed'}</h2>
-              <div className="text-sm text-gray-600 dark:text-gray-400">{userDoc?.email}</div>
-        </div>
-      </div>
+              <h2 className="mt-6 text-xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 bg-clip-text text-transparent">{userDoc?.name || 'Unnamed'}</h2>
+              <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">{userDoc?.email}</div>
+
+              {/* Decorative badge or status -->For future*/}
+              {/* <div className="mt-4 px-3 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-purple-500/20 dark:from-cyan-400/30 dark:to-purple-400/30 border border-white/20 dark:border-white/10">
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">Premium Member</span>
+              </div> */}
+            </div>
+          </div>
         </div>
 
         <div className="col-span-12 lg:col-span-8">
-          <div className="p-6 rounded-2xl bg-white/10 dark:bg-white/10 backdrop-blur-2xl border border-gray-300/20 dark:border-white/20">
+          <div className="p-6 rounded-2xl bg-white/20 dark:bg-white/15 backdrop-blur-2xl border border-gray-300/30 dark:border-white/30 shadow-lg">
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-12 md:col-span-6">
                 <label className="text-xs text-gray-600 dark:text-gray-300">Full Name</label>
@@ -434,14 +449,14 @@ export default function ProfilePage() {
                   <div className="text-sm font-semibold mb-2 text-gray-900 dark:text-white">Theme</div>
                   <div className="rounded-2xl p-0.5 bg-linear-to-r from-[#083344] via-[#0b2545] to-[#2b076e] shadow-[0_6px_30px_rgba(11,22,39,0.45)] dark:from-[#083344] dark:via-[#0b2545] dark:to-[#2b076e]">
                     <div className="bg-gray-100 dark:bg-[rgba(7,12,18,0.55)] rounded-lg p-3 flex items-center gap-3 backdrop-blur-sm">
-                      <button onClick={() => handleTheme('light')} disabled={themeLoading} aria-label="Light theme" className={`p-3 rounded-md transform transition-all ${userDoc?.theme==='light'?'ring-2 ring-emerald-400':''} bg-white dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0.04))] hover:scale-105 text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="Light">
-                        <Sun className="w-5 h-5 text-black"/>
+                    <button onClick={() => handleTheme('light')} disabled={themeLoading} aria-label="Light theme" className={`p-4 rounded-lg transform transition-all duration-200 ${userDoc?.theme==='light'?'ring-2 ring-emerald-400 shadow-lg':''} bg-white dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.2))] hover:scale-110 hover:shadow-xl text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="Light">
+                        <Sun className="w-6 h-6 text-black"/>
                       </button>
-                      <button onClick={() => handleTheme('dark')} disabled={themeLoading} aria-label="Dark theme" className={`p-3 rounded-md transform transition-all ${userDoc?.theme==='dark'?'ring-2 ring-emerald-400':''} bg-gray-200 dark:bg-[linear-gradient(135deg,rgba(0,0,0,0.25),rgba(255,255,255,0.02))] hover:scale-105 text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="Dark">
-                        <Moon className="w-5 h-5 text-black"/>
+                      <button onClick={() => handleTheme('dark')} disabled={themeLoading} aria-label="Dark theme" className={`p-4 rounded-lg transform transition-all duration-200 ${userDoc?.theme==='dark'?'ring-2 ring-emerald-400 shadow-lg':''} bg-gray-200 dark:bg-[linear-gradient(135deg,rgba(0,0,0,0.3),rgba(255,255,255,0.05))] hover:scale-110 hover:shadow-xl text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="Dark">
+                        <Moon className="w-6 h-6 text-black"/>
                       </button>
-                      <button onClick={() => handleTheme('system')} disabled={themeLoading} aria-label="System theme" className={`p-3 rounded-md transform transition-all ${userDoc?.theme==='system'?'ring-2 ring-emerald-400':''} bg-gray-150 dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.02),rgba(0,0,0,0.12))] hover:scale-105 text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="System">
-                        <Monitor className="w-5 h-5"/>
+                      <button onClick={() => handleTheme('system')} disabled={themeLoading} aria-label="System theme" className={`p-4 rounded-lg transform transition-all duration-200 ${userDoc?.theme==='system'?'ring-2 ring-emerald-400 shadow-lg':''} bg-gray-150 dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2))] hover:scale-110 hover:shadow-xl text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="System">
+                        <Monitor className="w-6 h-6"/>
                       </button>
                     </div>
                   </div>
@@ -453,7 +468,7 @@ export default function ProfilePage() {
           {/* Progress Overview */}
           <div className="mt-6 p-6 rounded-2xl bg-white/6 dark:bg-white/6 backdrop-blur-2xl border border-gray-300/20 dark:border-white/10">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Progress Overview</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5">
                 <div className="text-sm text-gray-600 dark:text-gray-300">Tasks Created</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white"><CountUp value={totalTasks||0} /></div>
@@ -490,7 +505,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] pb-2">
-                <div className="relative h-[220px] min-w-[600px] w-full">
+                <div className="relative h-[180px] sm:h-[220px] min-w-[600px] w-full">
                   <ResponsiveCalendar
                     data={heatMapData}
                     from={new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0]}
@@ -533,11 +548,13 @@ export default function ProfilePage() {
               <div className="rounded-3xl p-4 bg-white/40 dark:bg-[linear-gradient(180deg,rgba(2,6,23,0.78),rgba(2,6,23,0.58))] border border-gray-300/40 dark:border-[rgba(255,255,255,0.04)] shadow-[0_18px_60px_rgba(200,200,200,0.3)] dark:shadow-[0_18px_60px_rgba(3,6,23,0.7)]">
                 {/* outer neon / dark gradient border */}
                 <div className="rounded-2xl p-0.5 bg-gray-300 dark:bg-[linear-gradient(90deg,#022331,#071226)] shadow-[0_12px_40px_rgba(200,200,200,0.2)] dark:shadow-[0_12px_40px_rgba(3,6,23,0.75)]">
-                  <div className="rounded-2xl bg-white dark:bg-[rgba(0,0,0,0.55)] backdrop-blur-sm p-4 flex gap-4 items-center">
+                  <div className="rounded-2xl bg-white dark:bg-[rgba(0,0,0,0.55)] backdrop-blur-sm p-4 flex flex-col gap-4 md:flex-row md:gap-4 md:items-center">
 
                     {/* Change Password - light blue glass (higher contrast) */}
-                    <button onClick={sendPasswordReset} className="px-5 py-2.5 rounded-lg bg-blue-100 dark:bg-[linear-gradient(180deg,#06b6d4cc,#0369a1cc)] border border-blue-300 dark:border-[rgba(6,182,212,0.22)] text-blue-700 dark:text-white font-medium text-sm transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_14px_50px_rgba(6,182,212,0.18)]">
-                      Change Password
+                    <button onClick={sendPasswordReset} className="flex items-center gap-2 px-4 py-3 md:px-5 md:py-2.5 rounded-lg bg-blue-100 dark:bg-[linear-gradient(180deg,#06b6d4cc,#0369a1cc)] border border-blue-300 dark:border-[rgba(6,182,212,0.22)] text-blue-700 dark:text-white font-medium text-sm transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_14px_50px_rgba(6,182,212,0.18)]">
+                      <Key className="w-4 h-4" />
+                      <span className="hidden sm:inline">Change Password</span>
+                      <span className="sm:hidden">Password</span>
                     </button>
 
                     {/* Logout - light red glass (soft, more contrast) */}
@@ -551,13 +568,16 @@ export default function ProfilePage() {
                           </div>
                         </div>
                       ), { duration: Infinity });
-                    }} className="px-5 py-2.5 rounded-lg bg-red-100 dark:bg-[linear-gradient(180deg,#fb7185cc,#ef4444cc)] border border-red-300 dark:border-[rgba(239,68,68,0.22)] text-red-700 dark:text-white font-medium text-sm transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_14py_50px_rgba(239,68,68,0.18)]">
+                    }} className="flex items-center gap-2 px-4 py-3 md:px-5 md:py-2.5 rounded-lg bg-red-100 dark:bg-[linear-gradient(180deg,#fb7185cc,#ef4444cc)] border border-red-300 dark:border-[rgba(239,68,68,0.22)] text-red-700 dark:text-white font-medium text-sm transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_14px_50px_rgba(239,68,68,0.18)]">
+                      <LogOut className="w-4 h-4" />
                       Logout
                     </button>
 
                     {/* Delete - dark red glass (stronger) */}
-                    <button onClick={handleDeleteAccount} className="ml-auto px-6 py-2.5 rounded-lg bg-red-600 dark:bg-[linear-gradient(180deg,#7f1d1dcc,#581217cc)] text-white font-semibold border border-red-700 dark:border-[rgba(185,28,28,0.24)] shadow-[0_20px_60px_rgba(220,38,38,0.3)] dark:shadow-[0_20px_60px_rgba(185,28,28,0.22)] transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_28px_80px_rgba(185,28,28,0.32)]">
-                      Delete Account
+                    <button onClick={handleDeleteAccount} className="ml-auto flex items-center gap-2 px-4 py-3 md:px-6 md:py-2.5 rounded-lg bg-red-600 dark:bg-[linear-gradient(180deg,#7f1d1dcc,#581217cc)] text-white font-semibold border border-red-700 dark:border-[rgba(185,28,28,0.24)] shadow-[0_20px_60px_rgba(220,38,38,0.3)] dark:shadow-[0_20px_60px_rgba(185,28,28,0.22)] transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_28px_80px_rgba(185,28,28,0.32)]">
+                      <Trash2 className="w-4 h-4" />
+                      <span className="hidden sm:inline">Delete Account</span>
+                      <span className="sm:hidden">Delete</span>
                     </button>
                   </div>
                 </div>

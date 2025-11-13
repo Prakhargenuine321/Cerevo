@@ -67,11 +67,11 @@ export default function Login() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#0A0F1C] text-white font-inter">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#0A0F1C] text-white font-inter px-4 sm:px-6">
       {/* Background Lights */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-20 -left-32 w-[450px] h-[450px] bg-cyan-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-[350px] h-[350px] bg-purple-500/10 rounded-full blur-[120px]" />
+        <div className="absolute -top-10 sm:-top-20 -left-20 sm:-left-32 w-[300px] sm:w-[450px] h-[300px] sm:h-[450px] bg-cyan-500/10 rounded-full blur-[100px] sm:blur-[120px]" />
+        <div className="absolute -bottom-10 sm:bottom-0 -right-10 sm:right-0 w-[250px] sm:w-[350px] h-[250px] sm:h-[350px] bg-purple-500/10 rounded-full blur-[100px] sm:blur-[120px]" />
       </div>
 
       {/* Login Card */}
@@ -80,23 +80,23 @@ export default function Login() {
         initial={{ opacity: 0, y: 25 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="relative z-10 w-full max-w-md p-8 rounded-3xl backdrop-blur-xl bg-white/5 border border-white/10 shadow-[0_4px_40px_rgba(0,0,0,0.4)] space-y-6"
+        className="relative z-10 w-full max-w-md p-6 sm:p-8 rounded-2xl sm:rounded-3xl backdrop-blur-xl bg-white/5 border border-white/10 shadow-[0_4px_40px_rgba(0,0,0,0.4)] space-y-5 sm:space-y-6"
       >
         {/* Title */}
         <div className="text-center space-y-1">
-          <h1 className="text-3xl sm:text-4xl font-semibold bg-linear-to-r from-cyan-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
             Welcome Back
           </h1>
-          <p className="text-sm text-gray-400">Your journey continues here</p>
+          <p className="text-xs sm:text-sm text-gray-400">Your journey continues here</p>
         </div>
 
         {/* Input Fields */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div className="relative group">
             <input
               type="email"
               placeholder="Email"
-              className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-md text-sm placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40 transition-all"
+              className="w-full px-3 sm:px-4 py-3 sm:py-3.5 bg-white/5 border border-white/15 rounded-lg text-sm sm:text-base placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40 transition-all"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -106,7 +106,7 @@ export default function Login() {
             <input
               type="password"
               placeholder="Password"
-              className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-md text-sm placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 transition-all"
+              className="w-full px-3 sm:px-4 py-3 sm:py-3.5 bg-white/5 border border-white/15 rounded-lg text-sm sm:text-base placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 transition-all"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -123,19 +123,19 @@ export default function Login() {
           whileTap={{ scale: 0.97 }}
           disabled={busy || resetLoading}
           type="submit"
-          className="w-full py-3 rounded-lg text-sm font-medium bg-linear-to-r from-cyan-600/70 to-purple-600/70 hover:from-cyan-500/80 hover:to-purple-500/80 border border-white/10 text-white transition-all disabled:opacity-60"
+          className="w-full py-3 sm:py-3.5 rounded-lg text-sm sm:text-base font-medium bg-gradient-to-r from-cyan-600/70 to-purple-600/70 hover:from-cyan-500/80 hover:to-purple-500/80 border border-white/10 text-white transition-all disabled:opacity-60 touch-manipulation"
         >
           {busy ? "Signing in..." : "Login"}
         </motion.button>
 
         {/* Error Message with Forgot Password Link */}
         {authError && (
-          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-            <p className="text-xs text-red-200 mb-2">{authError}</p>
+          <div className="p-3 sm:p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+            <p className="text-xs sm:text-sm text-red-200 mb-2 leading-relaxed">{authError}</p>
             <button
               onClick={handleForgotPassword}
               disabled={resetLoading}
-              className="text-xs text-cyan-300 underline hover:text-cyan-200 transition-all disabled:opacity-60"
+              className="text-xs sm:text-sm text-cyan-300 underline hover:text-cyan-200 transition-all disabled:opacity-60 touch-manipulation py-1"
             >
               {resetLoading ? "Sending reset email..." : "Forgot Password?"}
             </button>
@@ -143,11 +143,11 @@ export default function Login() {
         )}
 
         {/* Register Link */}
-        <div className="text-center text-sm text-gray-400">
+        <div className="text-center text-xs sm:text-sm text-gray-400">
           Don’t have an account?{" "}
           <span
             onClick={() => navigate("/register")}
-            className="text-cyan-300 underline cursor-pointer hover:text-purple-300 transition-all"
+            className="text-cyan-300 underline cursor-pointer hover:text-purple-300 transition-all touch-manipulation"
           >
             Register Here
           </span>

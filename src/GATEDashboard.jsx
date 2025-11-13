@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // Add responsive styles
 const styles = document.createElement('style');
 styles.textContent = `
-  @media (max-width: 620px) {
+  /* Sprint filters responsiveness */
+  @media (max-width: 640px) {
     .sprint-filters {
       flex-direction: column;
       gap: 0.5rem;
@@ -13,8 +14,8 @@ styles.textContent = `
     .sprint-filters select,
     .sprint-filters button {
       width: 100%;
-      height: 2rem;
-      font-size: 0.75rem;
+      height: 2.5rem;
+      font-size: 0.875rem;
     }
     .sprint-filters-row {
       display: flex;
@@ -25,7 +26,7 @@ styles.textContent = `
 
   /* Custom scrollbar styles */
   .overflow-x-auto::-webkit-scrollbar {
-    height: 6px;
+    height: 8px;
   }
   
   .overflow-x-auto::-webkit-scrollbar-track {
@@ -34,15 +35,65 @@ styles.textContent = `
   
   .overflow-x-auto::-webkit-scrollbar-thumb {
     background-color: var(--muted);
-    border-radius: 3px;
+    border-radius: 4px;
+  }
+
+  .overflow-x-auto:hover::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
   }
 
   .overflow-x-auto {
+    scrollbar-width: thin;
     scrollbar-color: var(--muted) transparent;
   }
 
-  /* Timer responsiveness */
-  @media (max-width: 400px) {
+  /* Scroll shadow indicators for horizontal scroll */
+  .scroll-container {
+    position: relative;
+  }
+
+  .scroll-container::before,
+  .scroll-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 0.3s;
+  }
+
+  .scroll-container::before {
+    left: 0;
+    background: linear-gradient(to right, var(--card), transparent);
+  }
+
+  .scroll-container::after {
+    right: 0;
+    background: linear-gradient(to left, var(--card), transparent);
+  }
+
+  /* Timer responsiveness - Enhanced */
+  @media (max-width: 768px) {
+    .gate-timer {
+      gap: 0.75rem !important;
+      padding: 0.75rem !important;
+    }
+    
+    .gate-timer .tabular-nums {
+      font-size: 1.5rem !important;
+      line-height: 1.3 !important;
+    }
+
+    .gate-timer .text-[9px],
+    .gate-timer .text-[10px],
+    .gate-timer .text-xs {
+      font-size: 0.7rem !important;
+    }
+  }
+
+  @media (max-width: 480px) {
     .gate-timer {
       gap: 0.5rem !important;
       padding: 0.5rem !important;
@@ -61,21 +112,21 @@ styles.textContent = `
   }
 
   /* Extra small screens */
-  @media (max-width: 325px) {
+  @media (max-width: 360px) {
     .gate-timer {
-      gap: 0.25rem !important;
-      padding: 0.25rem !important;
+      gap: 0.375rem !important;
+      padding: 0.375rem !important;
     }
 
     .gate-timer .tabular-nums {
-      font-size: 1rem !important;
-      line-height: 1 !important;
+      font-size: 1.125rem !important;
+      line-height: 1.1 !important;
     }
 
     .gate-timer .text-[9px],
     .gate-timer .text-[10px],
     .gate-timer .text-xs {
-      font-size: 0.5rem !important;
+      font-size: 0.5625rem !important;
     }
 
     /* Remove rigid min-widths so digits can shrink naturally */
@@ -106,19 +157,49 @@ styles.textContent = `
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    top: calc(100% + 6px); /* place just below the line */
+    top: calc(100% + 6px);
     display: flex;
     align-items: center;
     justify-content: center;
     width: auto;
     height: auto;
-    pointer-events: none; /* avoid interfering with clicks */
+    pointer-events: none;
   }
 
-  /* Hide character on small screens regardless of utility classes */
+  /* Hide character on small screens */
   @media (max-width: 779px) {
     .timer-char-container { display: none !important; }
     .timer-char-line { display: none !important; }
+  }
+
+  /* Touch-friendly buttons - minimum 44x44px */
+  @media (max-width: 768px) {
+    .touch-target {
+      min-width: 44px !important;
+      min-height: 44px !important;
+    }
+  }
+
+  /* Card padding adjustments for mobile */
+  @media (max-width: 640px) {
+    .card-mobile-padding {
+      padding: 1rem !important;
+    }
+  }
+
+  /* Improved task list item spacing on mobile */
+  @media (max-width: 640px) {
+    .task-item-mobile {
+      padding: 1rem 0.75rem !important;
+    }
+  }
+
+  /* Better dialog sizing on mobile */
+  @media (max-width: 640px) {
+    [role="dialog"] {
+      max-width: calc(100vw - 2rem) !important;
+      margin: 1rem !important;
+    }
   }
 `;
 document.head.appendChild(styles);
@@ -1141,17 +1222,15 @@ if (user === null) return <LoginPrompt />;
     <div className="min-h-screen bg-background transition-colors dark:bg-slate-950 p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 md:gap-40">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{user?.exam?.toUpperCase?.() || "_"} Prep Dashboard</h1>
-            <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1"><CalendarDays className="h-4 w-4" /> {humanDate(today)} • {user?.name || "Guest"}</p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">{user?.exam?.toUpperCase?.() || "_"} Prep Dashboard</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mt-1">
+              <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> 
+              {humanDate(today)} • {user?.name || "Guest"}
+            </p>
           </div>
-          <div
-            className="
-    flex flex-wrap items-center justify-center sm:justify-start
-    gap-2 sm:gap-3 md:gap-4 w-full md:w-auto md:justify-end
-  "
-          >
+          <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-2.5 md:gap-3">
             {/* Theme Toggle */}
             <div className="shrink-0">
               <ThemeToggle />
@@ -1495,7 +1574,7 @@ if (user === null) return <LoginPrompt />;
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="shadow-sm bg-card text-card-foreground dark:border-slate-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -1824,7 +1903,7 @@ if (user === null) return <LoginPrompt />;
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-1">Color intensity shows number of tasks completed that day</div>
               </div>
-              <div className="overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] pb-2">
+              <div className="scroll-container overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] pb-2">
                 <div className="relative h-[220px] min-w-[600px] w-full">
                   <ResponsiveCalendar
                     data={heatMapData}
