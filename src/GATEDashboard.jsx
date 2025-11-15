@@ -1134,6 +1134,13 @@ export default function GATEDashboard() {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [journeyProgress, setJourneyProgress] = useState(0);
 
+  // Helper function to check if a URL is a YouTube link
+  const isYouTubeLink = (url) => {
+    if (!url) return false;
+    const lowerUrl = url.toLowerCase();
+    return lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be');
+  };
+
   // Constants for journey tracking
   const GATE_START_DATE = new Date('2023-11-08');
   const GATE_END_DATE = new Date('2026-02-07');
@@ -1769,7 +1776,13 @@ if (user === null) return <LoginPrompt />;
                               {t.link ? (
                                 <button
                                   className="inline-flex items-center gap-1 hover:text-foreground transition-colors bg-transparent border-0 p-0"
-                                  onClick={() => { window.location.href = `/player?taskId=${t.id}` }}
+                                  onClick={() => {
+                                    if (isYouTubeLink(t.link)) {
+                                      window.location.href = `/player?taskId=${t.id}`;
+                                    } else {
+                                      window.open(t.link, '_blank');
+                                    }
+                                  }}
                                 >
                                   <LinkIcon className="h-3 w-3" /> Open
                                 </button>
