@@ -122,6 +122,14 @@ export default function VideoPlayer({ taskId }) {
   const [showAnswer, setShowAnswer] = useState(false);
   const [searchQ, setSearchQ] = useState('');
 
+  // Timer states
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [timerMinutes, setTimerMinutes] = useState(25);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerTotalSeconds, setTimerTotalSeconds] = useState(25 * 60);
+  const [initialTimerDuration, setInitialTimerDuration] = useState(25 * 60);
+
   // Motivational messages (rotate every 45s)
   const MOTIVATIONAL_LINES = [
     "Small steps today → big results tomorrow 🚀",
@@ -260,6 +268,101 @@ export default function VideoPlayer({ taskId }) {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
+
+  // Timer countdown logic
+  useEffect(() => {
+    let intervalId = null;
+    if (isTimerRunning && timerTotalSeconds > 0) {
+      intervalId = setInterval(() => {
+        setTimerTotalSeconds(prev => {
+          if (prev <= 1) {
+            setIsTimerRunning(false);
+            playAlarmSound();
+            return 0;
+          }
+          return prev - 1;
+        });
+        playTickSound();
+      }, 1000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isTimerRunning, timerTotalSeconds]);
+
+  // Update timer display
+  useEffect(() => {
+    const mins = Math.floor(timerTotalSeconds / 60);
+    const secs = timerTotalSeconds % 60;
+    setTimerMinutes(mins);
+    setTimerSeconds(secs);
+  }, [timerTotalSeconds]);
+
+  // Sound functions using Web Audio API
+  const playTickSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+      // Fallback: no sound if Web Audio API not supported
+    }
+  };
+
+  const playAlarmSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime);
+      oscillator.type = 'square';
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 1);
+    } catch (e) {
+      // Fallback: no sound if Web Audio API not supported
+    }
+  };
+
+  // Timer functions
+  const startTimer = () => {
+    setIsTimerRunning(true);
+  };
+
+  const stopTimer = () => {
+    setIsTimerRunning(false);
+  };
+
+  const resetTimer = () => {
+    setIsTimerRunning(false);
+    setTimerTotalSeconds(initialTimerDuration);
+  };
+
+  const setTimerDuration = (minutes) => {
+    setTimerTotalSeconds(minutes * 60);
+    setInitialTimerDuration(minutes * 60);
+    setTimerMinutes(minutes);
+    setTimerSeconds(0);
+  };
   const link = task?.link || '';
   const yt = parseYouTubeId(link);
   const isHtml5Video = /\.(mp4|webm|ogg)(\?|$)/i.test(link || '');
@@ -746,7 +849,111 @@ export default function VideoPlayer({ taskId }) {
         <div className="absolute inset-0 bg-gradient-radial from-cyan-500/5 via-transparent to-transparent pointer-events-none" />
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-radial from-purple-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 relative z-10">
+        {/* Timer Dropdown */}
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="relative"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setTimerOpen(!timerOpen)}
+              className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-purple-500/20 backdrop-blur-xl border border-white/10 text-slate-100 font-medium shadow-xl hover:shadow-cyan-500/25 transition-all duration-200"
+            >
+              <Clock className="w-5 h-5" />
+              <span className="text-sm font-mono">
+                {String(timerMinutes).padStart(2, '0')}:{String(timerSeconds).padStart(2, '0')}
+              </span>
+              <motion.div
+                animate={{ rotate: timerOpen ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </motion.div>
+            </motion.button>
+
+            <AnimatePresence>
+              {timerOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute top-full left-1/2 transform -translate-x-1/2 mt-3 w-80 bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-6"
+                >
+                  <div className="text-center mb-4">
+                    <h3 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-400 mb-1">
+                      Study Timer
+                    </h3>
+                    <p className="text-xs text-slate-400">Set your focus session duration</p>
+                  </div>
+
+                  <div className="text-center mb-6">
+                    <div className="text-4xl font-mono font-bold text-slate-100 mb-2">
+                      {String(timerMinutes).padStart(2, '0')}:{String(timerSeconds).padStart(2, '0')}
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-2">
+                      <motion.div
+                        className="bg-gradient-to-r from-cyan-500 to-purple-500 h-2 rounded-full"
+                        style={{
+                          width: timerTotalSeconds > 0 ? `${(timerTotalSeconds / initialTimerDuration) * 100}%` : '0%'
+                        }}
+                        animate={{
+                          width: timerTotalSeconds > 0 ? `${(timerTotalSeconds / initialTimerDuration) * 100}%` : '0%'
+                        }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    {[5, 15, 25, 45, 60].map((mins) => (
+                      <motion.button
+                        key={mins}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setTimerDuration(mins)}
+                        className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-slate-100 text-sm font-medium transition-all duration-200"
+                      >
+                        {mins}m
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={isTimerRunning ? stopTimer : startTimer}
+                      className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                        isTimerRunning
+                          ? 'bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400'
+                          : 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg hover:shadow-cyan-500/25'
+                      }`}
+                    >
+                      {isTimerRunning ? 'Stop' : 'Start'}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={resetTimer}
+                      className="px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-slate-100 font-medium transition-all duration-200"
+                    >
+                      Reset
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 relative z-10 pt-20">
           {/* Video Column */}
           <div className="col-span-12 lg:col-span-8">
             <div className="rounded-xl overflow-hidden relative border border-white/6 shadow-2xl">

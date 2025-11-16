@@ -489,7 +489,7 @@ export default function GATEDashboard() {
       setTasksLoading(true);
       try {
         const list = await storage_list();
-        setTasks(list.sort((a, b) => (a.date < b.date ? -1 : 1)));
+        setTasks(list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)));
       } catch (e) {
         console.error(e);
         toast.error("Failed to load tasks");
@@ -604,7 +604,7 @@ export default function GATEDashboard() {
       console.log('refreshTasksFromStorage: Calling storage_list()');
       const list = await storage_list();
       console.log('refreshTasksFromStorage: Received list:', list);
-      setTasks(list.sort((a, b) => (a.date < b.date ? -1 : 1)));
+      setTasks(list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)));
       console.log('refreshTasksFromStorage: Tasks state updated');
     } catch (e) {
       console.error('refreshTasksFromStorage FAILED:', e);
@@ -1746,9 +1746,10 @@ if (user === null) return <LoginPrompt />;
               ) : filteredTasks.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No tasks. Click “Create Task” to add your first item.</div>
               ) : (
-                <ul className="divide-y divide-border">
-                  {filteredTasks.map((t) => (
-                    <li key={t.id} className="py-3 px-3 -mx-3 first:rounded-t-lg last:rounded-b-lg border-b border-border last:border-0">
+                <div className={filteredTasks.length > 4 ? "max-h-64 overflow-y-auto" : ""}>
+                  <ul className="divide-y divide-border">
+                    {filteredTasks.map((t) => (
+                      <li key={t.id} className="py-3 px-3 -mx-3 first:rounded-t-lg last:rounded-b-lg border-b border-border last:border-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="pt-0.5">
@@ -1850,9 +1851,13 @@ if (user === null) return <LoginPrompt />;
                         </div>
                       </div>
                     </li>
-                  ))}
-                </ul>
-              )}
+    ))}
+
+  </ul>
+
+  </div>
+
+)}
             </CardContent>
           </Card>
 
