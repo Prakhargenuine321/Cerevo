@@ -28,11 +28,11 @@ styles.textContent = `
   .overflow-x-auto::-webkit-scrollbar {
     height: 8px;
   }
-  
+
   .overflow-x-auto::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   .overflow-x-auto::-webkit-scrollbar-thumb {
     background-color: var(--muted);
     border-radius: 4px;
@@ -43,6 +43,29 @@ styles.textContent = `
   }
 
   .overflow-x-auto {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted) transparent;
+  }
+
+  /* Custom vertical scrollbar styles for tasks list */
+  .overflow-y-auto::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    background-color: var(--muted);
+    border-radius: 3px;
+  }
+
+  .overflow-y-auto:hover::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
+  }
+
+  .overflow-y-auto {
     scrollbar-width: thin;
     scrollbar-color: var(--muted) transparent;
   }
