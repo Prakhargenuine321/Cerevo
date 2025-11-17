@@ -76,6 +76,25 @@ function parseYouTubeId(url) {
   return null;
 }
 
+function parseYouTubeData(url) {
+  if (!url) return { videoId: null, playlistId: null };
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com') || u.hostname === 'youtu.be') {
+      const videoId = parseYouTubeId(url);
+      const playlistId = u.searchParams.get('list');
+      return { videoId, playlistId };
+    }
+  } catch (e) {
+    // fallback regex for playlist
+    const playlistMatch = url.match(/[?&]list=([A-Za-z0-9_-]+)/);
+    const playlistId = playlistMatch ? playlistMatch[1] : null;
+    const videoId = parseYouTubeId(url);
+    return { videoId, playlistId };
+  }
+  return { videoId: null, playlistId: null };
+}
+
 function ErrorBoundary({ children }) {
   const [hasError, setHasError] = useState(false);
 
@@ -148,6 +167,12 @@ export default function VideoPlayer({ taskId }) {
   const [motVisible, setMotVisible] = useState(true);
   const [filter, setFilter] = useState('all'); // all | today | completed (kept for future)
   const [justAddedPulse, setJustAddedPulse] = useState(false);
+
+  // Playlist states
+  const [playlistItems, setPlaylistItems] = useState([]);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [playlistLoading, setPlaylistLoading] = useState(false);
+  const [playlistVisible, setPlaylistVisible] = useState(false);
 
   useEffect(() => {
     console.log('VideoPlayer useEffect: taskId =', taskId);
@@ -389,10 +414,13 @@ export default function VideoPlayer({ taskId }) {
     setTimerSeconds(0);
   };
   const link = task?.link || '';
-  const yt = parseYouTubeId(link);
+  const { videoId, playlistId } = parseYouTubeData(link);
+  const yt = videoId;
   const isHtml5Video = /\.(mp4|webm|ogg)(\?|$)/i.test(link || '');
-  // Remove enablejsapi to prevent state tracking that can cause flicker/pauses
-  const embedSrc = yt ? `https://www.youtube.com/embed/${yt}?rel=0&modestbranding=1&enablejsapi=1&origin=${window.location.origin}` : link;
+  // Use selectedVideo if in playlist mode, otherwise use videoId
+  const currentVideoId = selectedVideo || yt;
+  // Only use embed URL for YouTube videos, never fallback to full YouTube URLs
+  const embedSrc = currentVideoId ? `https://www.youtube.com/embed/${currentVideoId}?rel=0&modestbranding=1&enablejsapi=1&origin=${window.location.origin}` : '';
 
   // Listen for cloud notes for this video (if authenticated)
   useEffect(() => {
@@ -529,6 +557,51 @@ export default function VideoPlayer({ taskId }) {
       el.removeEventListener('pause', onPause);
     };
   }, [isHtml5Video, videoRef.current]);
+
+  // Fetch playlist items when playlistId is detected
+  useEffect(() => {
+    if (!playlistId) return;
+
+    const fetchPlaylistItems = async () => {
+      setPlaylistLoading(true);
+      try {
+        const apiKey = import.meta.env.VITE_YT_API_KEY;
+        if (!apiKey) {
+          console.warn('YouTube API key not found');
+          return;
+        }
+
+        const response = await fetch(
+          `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${playlistId}&maxResults=50&key=${apiKey}`
+        );
+
+        if (!response.ok) {
+          throw new Error(`YouTube API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const items = data.items.map(item => ({
+          videoId: item.snippet.resourceId.videoId,
+          title: item.snippet.title,
+          thumbnail: item.snippet.thumbnails?.default?.url || item.snippet.thumbnails?.medium?.url
+        }));
+
+        setPlaylistItems(items);
+
+        // Default to first video if no video is selected
+        if (!selectedVideo && items.length > 0) {
+          setSelectedVideo(items[0].videoId);
+        }
+      } catch (error) {
+        console.error('Failed to fetch playlist items:', error);
+        toast.error('Failed to load playlist');
+      } finally {
+        setPlaylistLoading(false);
+      }
+    };
+
+    fetchPlaylistItems();
+  }, [playlistId, selectedVideo]);
 
   // Show loading spinner while fetching from Firebase
   if (loading) {
@@ -980,6 +1053,97 @@ export default function VideoPlayer({ taskId }) {
         </div>
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 relative z-10 pt-20">
+          {/* Playlist Slide-out Panel */}
+          <AnimatePresence>
+            {playlistVisible && playlistItems.length > 0 && (
+              <motion.div
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'tween', duration: 0.3 }}
+                className="fixed left-0 top-0 z-40 h-full w-80 bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-xl border-r border-white/10 shadow-2xl"
+              >
+                <div className="p-6 h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <h4 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-400">
+                      Playlist
+                    </h4>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setPlaylistVisible(false)}
+                      className="p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-slate-100 transition-all duration-200"
+                    >
+                      ✕
+                    </motion.button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+                    {playlistLoading ? (
+                      <div className="text-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-cyan-400 mx-auto mb-4" />
+                        <div className="text-sm text-slate-400">Loading playlist...</div>
+                      </div>
+                    ) : (
+                      <ul className="space-y-4">
+                        {playlistItems.map((item, idx) => (
+                          <motion.li
+                            key={item.videoId}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: idx * 0.05 }}
+                            className={`group p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                              selectedVideo === item.videoId
+                                ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border-cyan-400/50 shadow-lg shadow-cyan-500/20'
+                                : 'bg-gradient-to-br from-white/5 to-white/3 hover:from-white/8 hover:to-white/6 border-white/10 hover:border-cyan-400/30'
+                            }`}
+                            onClick={() => setSelectedVideo(item.videoId)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex-shrink-0 w-16 h-12 rounded-lg overflow-hidden bg-slate-700">
+                                {item.thumbnail ? (
+                                  <img
+                                    src={item.thumbnail}
+                                    alt={item.title}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                                    No Image
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-sm font-medium leading-tight line-clamp-2 ${
+                                  selectedVideo === item.videoId ? 'text-cyan-300' : 'text-slate-100'
+                                }`}>
+                                  {item.title}
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1">
+                                  Video {idx + 1} of {playlistItems.length}
+                                </div>
+                              </div>
+                              {selectedVideo === item.videoId && (
+                                <div className="flex-shrink-0">
+                                  <div className="w-3 h-3 bg-cyan-400 rounded-full animate-pulse"></div>
+                                </div>
+                              )}
+                            </div>
+                          </motion.li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="mt-6 text-center text-xs text-slate-400 font-medium">
+                    {playlistItems.length} videos loaded
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Video Column */}
           <div className="col-span-12 lg:col-span-8">
             <div className="rounded-xl overflow-hidden relative border border-white/6 shadow-2xl">
@@ -1005,7 +1169,20 @@ export default function VideoPlayer({ taskId }) {
                 )}
 
                 {/* floating badge */}
-                <div className="absolute top-4 right-4 z-30">
+                <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+                  {playlistItems.length > 0 && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setPlaylistVisible(!playlistVisible)}
+                      className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-purple-500/20 backdrop-blur-xl border border-white/10 text-xs font-medium text-slate-100 hover:bg-cyan-500/30 transition-all duration-200"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 6h16M4 10h16M4 14h16M4 18h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                      Playlist
+                    </motion.button>
+                  )}
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-linear-to-r from-[#06b6d4]/20 to-[#8b5cf6]/20 border border-white/6 text-xs font-medium text-[#E2E8F0]">
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M12 6v6l4 2" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     Focus Mode
@@ -1019,9 +1196,24 @@ export default function VideoPlayer({ taskId }) {
                   <h3 className="text-xl font-semibold bg-clip-text text-transparent bg-linear-to-r from-[#06b6d4] to-[#8b5cf6]">{task.title}</h3>
                   <div className="text-sm text-[#94A3B8] mt-1">{task.subject || 'General'}</div>
                 </div>
+                {playlistItems.length > 0 && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setPlaylistVisible(!playlistVisible)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500/20 to-purple-500/20 backdrop-blur-xl border border-white/10 text-sm font-medium text-slate-100 hover:bg-cyan-500/30 transition-all duration-200"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                      <path d="M4 6h16M4 10h16M4 14h16M4 18h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                    Playlist
+                  </motion.button>
+                )}
               </div>
             </div>
           </div>
+
+
 
 
           {/* Notes Column */}
