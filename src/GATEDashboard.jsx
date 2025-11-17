@@ -1892,7 +1892,7 @@ if (user === null) return <LoginPrompt />;
               {subjectStats.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No data yet. Add tasks with subjects to see progress.</p>
               ) : (
-                <div className="space-y-3">
+                <div className={subjectStats.length > 4 ? "max-h-64 overflow-y-auto space-y-3" : "space-y-3"}>
                   {subjectStats.map((s) => (
                     <div key={s.name} className="space-y-1">
                       <div className="flex justify-between text-sm">
