@@ -129,6 +129,9 @@ export default function VideoPlayer({ taskId }) {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerTotalSeconds, setTimerTotalSeconds] = useState(25 * 60);
   const [initialTimerDuration, setInitialTimerDuration] = useState(25 * 60);
+  const [showBreakModal, setShowBreakModal] = useState(false);
+  const [breakMessage, setBreakMessage] = useState('');
+  const [breakVideoId, setBreakVideoId] = useState('');
 
   // Motivational messages (rotate every 45s)
   const MOTIVATIONAL_LINES = [
@@ -278,11 +281,30 @@ export default function VideoPlayer({ taskId }) {
           if (prev <= 1) {
             setIsTimerRunning(false);
             playAlarmSound();
+            // Show break modal after timer ends
+            setTimeout(() => {
+              const breakMessages = [
+                "Great job! Take a 10-minute break to recharge. 🌟",
+                "Well done! Step away, stretch, and breathe deeply. 🧘‍♀️",
+                "Excellent focus! Walk around or meditate for 10 minutes. 🚶‍♂️",
+                "Awesome session! Take time to relax and reset. ☕",
+                "Fantastic work! Enjoy a short break to refresh your mind. 🌸"
+              ];
+              const breakVideos = [
+                "j9njKwCWc-A", // Calming music
+                "lFcSrYw-ARY", // Nature sounds
+                "tNkZsRW7h2c", // Meditation music
+                "2OEL4P1Rz04", // Relaxing piano
+                "4pLUleLdwY4"  // Soothing music
+              ];
+              setBreakMessage(breakMessages[Math.floor(Math.random() * breakMessages.length)]);
+              setBreakVideoId(breakVideos[Math.floor(Math.random() * breakVideos.length)]);
+              setShowBreakModal(true);
+            }, 2000); // Show modal after alarm sound
             return 0;
           }
           return prev - 1;
         });
-        playTickSound();
       }, 1000);
     }
     return () => {
@@ -330,14 +352,17 @@ export default function VideoPlayer({ taskId }) {
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime);
-      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note - soothing frequency
+      oscillator.type = 'sine'; // Smooth sine wave for gentle sound
 
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+      // Gentle fade in and fade out
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.5); // Fade in
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime + 2.5);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3); // Fade out
 
       oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 1);
+      oscillator.stop(audioContext.currentTime + 3);
     } catch (e) {
       // Fallback: no sound if Web Audio API not supported
     }
@@ -376,6 +401,7 @@ export default function VideoPlayer({ taskId }) {
       const user = auth.currentUser;
       if (!user) return;
       if (!yt) return; // nothing to listen for
+
 
       try {
         const notesCol = collection(db, 'users', user.uid, 'videoNotes');
@@ -1278,6 +1304,59 @@ export default function VideoPlayer({ taskId }) {
                       </div>
                     </div>
                   )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Break Modal */}
+          <AnimatePresence>
+            {showBreakModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+              >
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  className="w-full max-w-2xl mx-4 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-8 shadow-2xl border border-white/10"
+                >
+                  <div className="text-center mb-6">
+                    <div className="text-6xl mb-4">🌟</div>
+                    <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-400 mb-4">
+                      Break Time!
+                    </h3>
+                    <p className="text-lg text-slate-300 leading-relaxed mb-6">
+                      {breakMessage}
+                    </p>
+                    <p className="text-sm text-slate-400 mb-8">
+                      Take at least 10 minutes to recharge. Here's some soothing music to help you relax:
+                    </p>
+                  </div>
+
+                  <div className="aspect-video w-full mb-6 rounded-xl overflow-hidden">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${breakVideoId}?autoplay=1&rel=0&modestbranding=1`}
+                      className="w-full h-full"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+
+                  <div className="flex gap-4 justify-center">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowBreakModal(false)}
+                      className="px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-bold shadow-xl hover:shadow-cyan-500/25 transition-all duration-200"
+                    >
+                      Back to Study
+                    </motion.button>
+                  </div>
                 </motion.div>
               </motion.div>
             )}
