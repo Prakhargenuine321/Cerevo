@@ -5,8 +5,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ResponsiveCalendar } from '@nivo/calendar';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'sonner';
-import { ArrowLeft, Camera, Edit3, Check, X, Sun, Moon, Monitor, Key, LogOut, Trash2 } from 'lucide-react';
+import { ArrowLeft, Camera, Edit3, Check, X, Sun, Moon, Monitor, Key, LogOut, Trash2, User, Calendar, Award, Flame, Mail, Copy, CheckCircle2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { motion } from 'framer-motion';
 
 function CountUp({ value, duration = 800 }) {
   const [display, setDisplay] = useState(0);
@@ -87,7 +88,7 @@ export default function ProfilePage() {
 
   const initials = useMemo(() => {
     const name = userDoc?.name || auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'U';
-    return name.split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+    return name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
   }, [userDoc]);
 
   const formatMemberSince = (input) => {
@@ -240,30 +241,30 @@ export default function ProfilePage() {
   };
 
   const handleTheme = async (theme) => {
-    setThemeLoading(true);
+    // Optimistic Update: Apply changes immediately
+    setUserDoc(prev => ({ ...prev, theme }));
+    localStorage.setItem('theme', theme);
+
+    // Apply theme to document root element
+    const root = document.documentElement;
+    if (theme === 'system') {
+      root.classList.remove('light', 'dark');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) root.classList.add('dark');
+    } else {
+      root.classList.remove('light', 'dark');
+      root.classList.add(theme);
+    }
+
+    // Background Sync
     try {
       const dref = doc(db, 'users', uid);
       await updateDoc(dref, { theme });
-      setUserDoc(prev => ({ ...prev, theme }));
-      localStorage.setItem('theme', theme);
-      
-      // Apply theme to document root element
-      const root = document.documentElement;
-      if (theme === 'system') {
-        root.classList.remove('light', 'dark');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (prefersDark) root.classList.add('dark');
-      } else {
-        root.classList.remove('light', 'dark');
-        root.classList.add(theme);
-      }
-      
-      toast.success('Theme updated');
-      setThemeLoading(false);
+      // toast.success('Theme updated'); // Optional: might be too noisy for instant action
     } catch (err) {
       console.error('Theme update failed', err);
-      toast.error('Failed to update theme');
-      setThemeLoading(false);
+      toast.error('Failed to sync theme preference');
+      // Optional: Revert UI here if strict consistency is needed
     }
   };
 
@@ -281,11 +282,11 @@ export default function ProfilePage() {
 
   const handleDeleteAccount = () => {
     toast.custom((t) => (
-      <div className="w-full max-w-sm bg-gray-900/95 dark:bg-gray-900/98 backdrop-blur-md border border-red-500/50 rounded-lg p-4 shadow-2xl">
-        <div className="text-sm font-semibold text-white mb-2">Delete Account?</div>
-        <p className="text-xs text-gray-300 mb-4">This will permanently remove all your data including tasks, notes, and profile. This action cannot be undone.</p>
+      <div className="w-full max-w-sm bg-background border border-destructive/50 rounded-lg p-4 shadow-2xl">
+        <div className="text-sm font-semibold text-foreground mb-2">Delete Account?</div>
+        <p className="text-xs text-muted-foreground mb-4">This will permanently remove all your data including tasks, notes, and profile. This action cannot be undone.</p>
         <div className="flex gap-2 justify-end">
-          <button onClick={() => toast.dismiss(t)} className="px-3 py-1.5 rounded text-xs bg-gray-600 hover:bg-gray-500 text-white transition-colors">Cancel</button>
+          <button onClick={() => toast.dismiss(t)} className="px-3 py-1.5 rounded text-xs bg-muted hover:bg-muted/80 text-foreground transition-colors">Cancel</button>
           <button onClick={async () => {
             toast.dismiss(t);
             const deleteLoadingToast = toast.loading('Deleting account and all data...');
@@ -318,7 +319,7 @@ export default function ProfilePage() {
               toast.dismiss(deleteLoadingToast);
               toast.error('Failed to delete account: ' + err.message);
             }
-          }} className="px-3 py-1.5 rounded text-xs bg-red-600 hover:bg-red-700 text-white transition-colors">Delete</button>
+          }} className="px-3 py-1.5 rounded text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors">Delete</button>
         </div>
       </div>
     ), { duration: Infinity });
@@ -326,266 +327,390 @@ export default function ProfilePage() {
 
   // Show loading screen
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Loading...</div></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-muted-foreground text-sm">Loading profile...</div>
+        </div>
+      </div>
+    );
   }
 
   // If no user, redirect to login
   if (!uid) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Redirecting to login...</div></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Redirecting to login...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => (window.location.href = '/dashboard')} className="p-2 rounded-md bg-white/5 hover:bg-white/8">
-          <ArrowLeft />
-        </button>
-        <h1 className="text-xl md:text-2xl font-semibold">Your Profile</h1>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-4">
-          <div className="relative p-6 rounded-3xl bg-gradient-to-br from-white/25 via-white/15 to-white/10 dark:from-white/15 dark:via-white/8 dark:to-white/5 backdrop-blur-3xl border border-white/30 dark:border-white/20 shadow-2xl overflow-hidden">
-            {/* Decorative background elements */}
-            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5 dark:from-cyan-400/10 dark:via-purple-400/10 dark:to-pink-400/10"></div>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-cyan-400/10 to-transparent rounded-full blur-xl"></div>
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-purple-400/10 to-transparent rounded-full blur-xl"></div>
-
-            <div className="relative flex flex-col items-center z-10">
-              <div className="relative">
-                {userDoc?.photoURL ? (
-                  <div className="relative">
-                    <img src={userDoc.photoURL} alt="avatar" className="w-32 h-32 rounded-full object-cover shadow-2xl ring-4 ring-white/20 dark:ring-white/10" />
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400/20 to-purple-400/20"></div>
-                  </div>
-                ) : (
-                  <div className="w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-cyan-400/30 via-purple-400/30 to-pink-400/30 dark:from-cyan-400/40 dark:via-purple-400/40 dark:to-pink-400/40 text-white dark:text-white text-2xl font-bold shadow-2xl ring-4 ring-white/20 dark:ring-white/10">
-                    {initials}
-                  </div>
-                )}
-                <label className="absolute bottom-0 right-0 bg-gradient-to-br from-cyan-400 to-purple-400 rounded-full p-2.5 cursor-pointer shadow-lg hover:scale-110 transition-transform duration-200">
-                  <Camera className="w-4 h-4 text-white" />
-                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadPicture(e.target.files[0])} />
-                </label>
-              </div>
-              <h2 className="mt-6 text-xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 bg-clip-text text-transparent">{userDoc?.name || 'Unnamed'}</h2>
-              <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">{userDoc?.email}</div>
-
-              {/* Decorative badge or status -->For future*/}
-              {/* <div className="mt-4 px-3 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-purple-500/20 dark:from-cyan-400/30 dark:to-purple-400/30 border border-white/20 dark:border-white/10">
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">Premium Member</span>
-              </div> */}
-            </div>
+    <div className="min-h-screen bg-background text-foreground p-3 md:p-8 transition-colors duration-300">
+      <div className="max-w-6xl mx-auto space-y-6 md:space-y-8">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-4"
+        >
+          <button
+            onClick={() => (window.location.href = '/dashboard')}
+            className="p-2.5 rounded-xl bg-card hover:bg-accent border border-border transition-all duration-200 hover:shadow-md cursor-pointer"
+          >
+            <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+          </button>
+          <div>
+            <h1 className="text-xl md:text-3xl font-bold tracking-tight">Your Profile</h1>
+            <p className="text-muted-foreground text-xs md:text-sm">Manage your account settings and preferences</p>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="col-span-12 lg:col-span-8">
-          <div className="p-6 rounded-2xl bg-white/20 dark:bg-white/15 backdrop-blur-2xl border border-gray-300/30 dark:border-white/30 shadow-lg">
-            <div className="grid grid-cols-12 gap-4">
-              <div className="col-span-12 md:col-span-6">
-                <label className="text-xs text-gray-600 dark:text-gray-300">Full Name</label>
-                {editing.field === 'name' ? (
-                  <div className="flex gap-2 mt-2">
-                    <input className="flex-1 p-3 rounded-lg bg-white dark:bg-black/30 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 transition" value={editing.value} onChange={(e) => setEditing(s => ({...s, value: e.target.value}))} />
-                    <button onClick={saveEdit} className="p-2 bg-green-600 dark:bg-green-600 rounded-lg"><Check className="w-4 h-4"/></button>
-                    <button onClick={() => setEditing({field:null,value:''})} className="p-2 bg-gray-400 dark:bg-gray-600 rounded-lg"><X className="w-4 h-4"/></button>
-                  </div>
-                ) : (
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="px-4 py-3 rounded-lg bg-white dark:bg-black/30 text-gray-900 dark:text-gray-100 text-lg truncate">{userDoc?.name || '—'}</div>
-                    <button onClick={() => startEdit('name')} className="p-2 text-gray-500 dark:text-gray-400"><Edit3 /></button>
-                  </div>
-                )}
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+          {/* Left Column: Profile Card */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+            className="col-span-12 lg:col-span-4"
+          >
+            <div className="relative p-6 md:p-8 rounded-3xl bg-card border border-border shadow-xl overflow-hidden group">
+              {/* Decorative background elements */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
 
-              <div className="col-span-12 md:col-span-6">
-                <label className="text-xs text-gray-600 dark:text-gray-300">Exam</label>
-                {editing.field === 'exam' ? (
-                  <div className="flex gap-2 mt-2">
-                    <Select value={editing.value} onValueChange={(value) => setEditing(s => ({...s, value}))}>
-                      <SelectTrigger className="flex-1 bg-white dark:bg-black/30 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition">
-                        <SelectValue placeholder="Select exam" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="GATE">GATE</SelectItem>
-                        <SelectItem value="IIT-JEE">IIT-JEE</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <button onClick={saveEdit} className="p-2 bg-green-600 dark:bg-green-600 rounded-lg"><Check className="w-4 h-4"/></button>
-                    <button onClick={() => setEditing({field:null,value:''})} className="p-2 bg-gray-400 dark:bg-gray-600 rounded-lg"><X className="w-4 h-4"/></button>
-                  </div>
-                ) : (
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="px-4 py-3 rounded-lg bg-white dark:bg-black/30 text-gray-900 dark:text-gray-100 truncate">{userDoc?.exam || '—'}</div>
-                    <button onClick={() => startEdit('exam')} className="p-2 text-gray-500 dark:text-gray-400"><Edit3 /></button>
-                  </div>
-                )}
-              </div>
+              <div className="relative flex flex-col items-center z-10">
+                <div className="relative mb-6">
+                  {userDoc?.photoURL ? (
+                    <div className="relative group/avatar">
+                      <img
+                        src={userDoc.photoURL}
+                        alt="avatar"
+                        className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover shadow-2xl ring-4 ring-background transition-transform duration-300 group-hover/avatar:scale-105"
+                      />
+                      <div className="absolute inset-0 rounded-full bg-black/0 group-hover/avatar:bg-black/10 transition-colors duration-300"></div>
+                    </div>
+                  ) : (
+                    <div className="w-32 h-32 md:w-40 md:h-40 rounded-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20 text-primary text-3xl md:text-4xl font-bold shadow-2xl ring-4 ring-background">
+                      {initials}
+                    </div>
+                  )}
+                  <label className="absolute bottom-2 right-2 bg-primary text-primary-foreground rounded-full p-2.5 md:p-3 cursor-pointer shadow-lg hover:scale-110 hover:bg-primary/90 transition-all duration-200">
+                    <Camera className="w-4 h-4 md:w-5 md:h-5" />
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadPicture(e.target.files[0])} />
+                  </label>
+                </div>
 
-              <div className="col-span-12 md:col-span-6">
-                <label className="text-xs text-gray-600 dark:text-gray-300">Exam Date</label>
-                {editing.field === 'examDate' ? (
-                  <div className="flex gap-2 mt-2">
-                    <input type="date" className="flex-1 p-3 rounded-lg bg-white dark:bg-black/30 placeholder-gray-400 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition" value={editing.value} onChange={(e) => setEditing(s => ({...s, value: e.target.value}))} />
-                    <button onClick={saveEdit} className="p-2 bg-green-600 dark:bg-green-600 rounded-lg"><Check className="w-4 h-4"/></button>
-                    <button onClick={() => setEditing({field:null,value:''})} className="p-2 bg-gray-400 dark:bg-gray-600 rounded-lg"><X className="w-4 h-4"/></button>
-                  </div>
-                ) : (
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="px-4 py-3 rounded-lg bg-white dark:bg-black/30 text-gray-900 dark:text-gray-100">{userDoc?.examDate ? formatMemberSince(userDoc?.examDate) : '—'}</div>
-                    <button onClick={() => startEdit('examDate')} className="p-2 text-gray-500 dark:text-gray-400"><Edit3 /></button>
-                  </div>
-                )}
-              </div>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground text-center mb-2">{userDoc?.name || 'Unnamed User'}</h2>
 
-              <div className="col-span-12 md:col-span-6">
-                <label className="text-xs text-gray-600 dark:text-gray-300">Member Since</label>
-                <div className="mt-2"><div className="px-4 py-3 rounded-lg bg-white dark:bg-black/30 text-gray-900 dark:text-gray-100 inline-block">{formatMemberSince(userDoc?.createdAt)}</div></div>
-              </div>
-
-              <div className="col-span-12">
-                <div className="mt-4">
-                  <div className="text-sm font-semibold mb-2 text-gray-900 dark:text-white">Theme</div>
-                  <div className="rounded-2xl p-0.5 bg-linear-to-r from-[#083344] via-[#0b2545] to-[#2b076e] shadow-[0_6px_30px_rgba(11,22,39,0.45)] dark:from-[#083344] dark:via-[#0b2545] dark:to-[#2b076e]">
-                    <div className="bg-gray-100 dark:bg-[rgba(7,12,18,0.55)] rounded-lg p-3 flex items-center gap-3 backdrop-blur-sm">
-                    <button onClick={() => handleTheme('light')} disabled={themeLoading} aria-label="Light theme" className={`p-4 rounded-lg transform transition-all duration-200 ${userDoc?.theme==='light'?'ring-2 ring-emerald-400 shadow-lg':''} bg-white dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.2))] hover:scale-110 hover:shadow-xl text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="Light">
-                        <Sun className="w-6 h-6 text-black"/>
-                      </button>
-                      <button onClick={() => handleTheme('dark')} disabled={themeLoading} aria-label="Dark theme" className={`p-4 rounded-lg transform transition-all duration-200 ${userDoc?.theme==='dark'?'ring-2 ring-emerald-400 shadow-lg':''} bg-gray-200 dark:bg-[linear-gradient(135deg,rgba(0,0,0,0.3),rgba(255,255,255,0.05))] hover:scale-110 hover:shadow-xl text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="Dark">
-                        <Moon className="w-6 h-6 text-black"/>
-                      </button>
-                      <button onClick={() => handleTheme('system')} disabled={themeLoading} aria-label="System theme" className={`p-4 rounded-lg transform transition-all duration-200 ${userDoc?.theme==='system'?'ring-2 ring-emerald-400 shadow-lg':''} bg-gray-150 dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2))] hover:scale-110 hover:shadow-xl text-gray-800 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed`} title="System">
-                        <Monitor className="w-6 h-6"/>
-                      </button>
+                <div className="group/email relative flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 dark:bg-primary/10 border border-primary/10 hover:border-primary/20 transition-all duration-300 backdrop-blur-sm cursor-pointer"
+                  onClick={() => {
+                    navigator.clipboard.writeText(userDoc?.email);
+                    toast.success('Email copied to clipboard');
+                  }}
+                >
+                  <Mail className="w-3.5 h-3.5 text-primary/70" />
+                  <span className="text-sm font-medium text-foreground/80">{userDoc?.email}</span>
+                  <div className="w-px h-3 bg-border mx-1"></div>
+                  <Copy className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover/email:opacity-100 transition-opacity duration-200" />
+                  <div className="absolute -right-1 -top-1">
+                    <div className="bg-background rounded-full p-0.5 shadow-sm">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 fill-green-500/10" />
                     </div>
                   </div>
                 </div>
               </div>
-        </div>
-      </div>
-
-          {/* Progress Overview */}
-          <div className="mt-6 p-6 rounded-2xl bg-white/6 dark:bg-white/6 backdrop-blur-2xl border border-gray-300/20 dark:border-white/10">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Progress Overview</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5">
-                <div className="text-sm text-gray-600 dark:text-gray-300">Tasks Created</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white"><CountUp value={totalTasks||0} /></div>
-              </div>
-              <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5">
-                <div className="text-sm text-gray-600 dark:text-gray-300">Tasks Completed</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white"><CountUp value={completedTasks||0} /></div>
-              </div>
-              <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5">
-                <div className="text-sm text-gray-600 dark:text-gray-300">Notes Added</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white"><CountUp value={totalNotes||0} /></div>
-              </div>
-              <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5">
-                <div className="text-sm text-gray-600 dark:text-gray-300">Current Streak 🔥</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white"><CountUp value={streak||0} /></div>
-              </div>
             </div>
+          </motion.div>
 
-            {/* Heatmap (tasks completed) - same component/logic as dashboard */}
-            <div className="mt-6">
-              <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">Focus Activity</div>
-              <div className="mb-3">
-                <div className="text-xs font-medium text-gray-700 dark:text-muted-foreground mb-2">Heatmap legend (tasks completed)</div>
-                <div className="w-full h-3 rounded-md overflow-hidden" style={{ background: 'linear-gradient(to right, #ffffff 0%, #86efac 20%, #22c55e 40%, #f59e0b 60%, #ef4444 80%, #b91c1c 100%)' }} />
-                <div className="flex justify-between text-xs text-gray-700 dark:text-muted-foreground mt-2">
-                  <span>0</span>
-                  <span>1-2</span>
-                  <span>3-4</span>
-                  <span>5-6</span>
-                  <span>7-9</span>
-                  <span>10+</span>
+          {/* Right Column: Details & Settings */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="col-span-12 lg:col-span-8 space-y-6"
+          >
+            {/* Personal Info Card */}
+            <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                <User className="w-5 h-5 text-primary" />
+                Personal Information
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Full Name */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Full Name</label>
+                  {editing.field === 'name' ? (
+                    <div className="flex flex-col min-[350px]:flex-row gap-2">
+                      <div className="flex-1 relative rounded-lg p-[1px] overflow-hidden">
+                        <div className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,#22d3ee_20%,#818cf8_50%,#c084fc_80%,transparent_100%)]" />
+                        <input
+                          autoFocus
+                          className="relative w-full h-full px-3 py-2 rounded-lg bg-background border-none outline-none focus:ring-0"
+                          value={editing.value}
+                          onChange={(e) => setEditing(s => ({ ...s, value: e.target.value }))}
+                        />
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={saveEdit} className="flex-1 min-[350px]:flex-none p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center justify-center"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditing({ field: null, value: '' })} className="flex-1 min-[350px]:flex-none p-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 flex items-center justify-center"><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="group flex items-center justify-between p-3 rounded-lg bg-accent/30 border border-transparent hover:border-border transition-all">
+                      <span className="font-medium">{userDoc?.name || '—'}</span>
+                      <button onClick={() => startEdit('name')} className="p-1.5 text-muted-foreground hover:text-primary transition-all cursor-pointer"><Edit3 className="w-4 h-4" /></button>
+                    </div>
+                  )}
                 </div>
-                <div className="text-[11px] text-gray-700 dark:text-muted-foreground mt-1">Color intensity shows number of tasks completed that day</div>
-              </div>
 
-              <div className="overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] pb-2">
-                <div className="relative h-[180px] sm:h-[220px] min-w-[600px] w-full">
-                  <ResponsiveCalendar
-                    data={heatMapData}
-                    from={new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0]}
-                    to={new Date().toISOString().split('T')[0]}
-                    emptyColor={"var(--empty-cell-color)"}
-                    margin={{ top: 30, right: 32, bottom: 20, left: 40 }}
-                    monthBorderColor="transparent"
-                    dayBorderWidth={1}
-                    dayBorderColor={"var(--cell-border-color)"}
-                    daySpacing={4}
-                    dayRadius={3}
-                    monthSpacing={12}
-                    monthLegendPosition="before"
-                    monthLegendOffset={10}
-                    monthLegendTicks={[0,1,2,3,4,5,6,7,8,9,10,11]}
-                    square={true}
-                    theme={{ textColor: 'var(--muted-foreground)', fontSize: 10, labels: { text: { fill: 'var(--muted-foreground)', fontSize: 10 } } }}
-                    minValue={0}
-                    maxValue={10}
-                    colorScale={getHeatmapColor}
-                    tooltip={({ value, day }) => {
-                      const completedTasks = value || 0;
-                      return (
-                        <div className="rounded-md bg-popover px-3 py-1.5 text-xs border shadow-md">
-                          <div className="font-semibold text-popover-foreground">{completedTasks > 0 ? `${completedTasks} completed` : 'No tasks'}</div>
-                          <div className="text-[11px] text-popover-foreground">{day}</div>
+                {/* Exam */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Target Exam</label>
+                  {editing.field === 'exam' ? (
+                    <div className="flex flex-col min-[350px]:flex-row gap-2">
+                      <Select value={editing.value} onValueChange={(value) => setEditing(s => ({ ...s, value }))}>
+                        <div className="flex-1 relative rounded-lg p-[1px] overflow-hidden">
+                          <div className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,#22d3ee_20%,#818cf8_50%,#c084fc_80%,transparent_100%)]" />
+                          <SelectTrigger className="relative w-full h-full bg-background dark:bg-card border-none outline-none focus:ring-0 focus:ring-offset-0 z-10">
+                            <SelectValue placeholder="Select exam" />
+                          </SelectTrigger>
                         </div>
-                      );
-                    }}
-                  />
+                        <SelectContent>
+                          <SelectItem value="GATE">GATE</SelectItem>
+                          <SelectItem value="IIT-JEE">IIT-JEE</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={saveEdit} className="flex-1 min-[350px]:flex-none p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center justify-center"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditing({ field: null, value: '' })} className="flex-1 min-[350px]:flex-none p-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 flex items-center justify-center"><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="group flex items-center justify-between p-3 rounded-lg bg-accent/30 border border-transparent hover:border-border transition-all">
+                      <span className="font-medium">{userDoc?.exam || '—'}</span>
+                      <button onClick={() => startEdit('exam')} className="p-1.5 text-muted-foreground hover:text-primary transition-all cursor-pointer"><Edit3 className="w-4 h-4" /></button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Achievements & Actions */}
-          <div className="mt-6 p-6 rounded-2xl bg-white/30 dark:bg-[rgba(7,12,18,0.6)] backdrop-blur-2xl border border-gray-300/30 dark:border-[rgba(255,255,255,0.03)]">
-            <div className="mt-6">
-              {/* containing background box to group action buttons (increased contrast) */}
-              <div className="rounded-3xl p-4 bg-white/40 dark:bg-[linear-gradient(180deg,rgba(2,6,23,0.78),rgba(2,6,23,0.58))] border border-gray-300/40 dark:border-[rgba(255,255,255,0.04)] shadow-[0_18px_60px_rgba(200,200,200,0.3)] dark:shadow-[0_18px_60px_rgba(3,6,23,0.7)]">
-                {/* outer neon / dark gradient border */}
-                <div className="rounded-2xl p-0.5 bg-gray-300 dark:bg-[linear-gradient(90deg,#022331,#071226)] shadow-[0_12px_40px_rgba(200,200,200,0.2)] dark:shadow-[0_12px_40px_rgba(3,6,23,0.75)]">
-                  <div className="rounded-2xl bg-white dark:bg-[rgba(0,0,0,0.55)] backdrop-blur-sm p-4 flex flex-col gap-4 md:flex-row md:gap-4 md:items-center">
+                {/* Exam Date */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Exam Date</label>
+                  {editing.field === 'examDate' ? (
+                    <div className="flex flex-col min-[350px]:flex-row gap-2">
+                      <div className="flex-1 relative rounded-lg p-[1px] overflow-hidden">
+                        <div className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,#22d3ee_20%,#818cf8_50%,#c084fc_80%,transparent_100%)]" />
+                        <input
+                          type="date"
+                          className="relative w-full h-full px-3 py-2 rounded-lg bg-background border-none outline-none focus:ring-0"
+                          value={editing.value}
+                          onChange={(e) => setEditing(s => ({ ...s, value: e.target.value }))}
+                        />
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={saveEdit} className="flex-1 min-[350px]:flex-none p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center justify-center"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditing({ field: null, value: '' })} className="flex-1 min-[350px]:flex-none p-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 flex items-center justify-center"><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="group flex items-center justify-between p-3 rounded-lg bg-accent/30 border border-transparent hover:border-border transition-all">
+                      <span className="font-medium">{userDoc?.examDate ? formatMemberSince(userDoc?.examDate) : '—'}</span>
+                      <button onClick={() => startEdit('examDate')} className="p-1.5 text-muted-foreground hover:text-primary transition-all cursor-pointer"><Edit3 className="w-4 h-4" /></button>
+                    </div>
+                  )}
+                </div>
 
-                    {/* Change Password - light blue glass (higher contrast) */}
-                    <button onClick={sendPasswordReset} className="flex items-center gap-2 px-4 py-3 md:px-5 md:py-2.5 rounded-lg bg-blue-100 dark:bg-[linear-gradient(180deg,#06b6d4cc,#0369a1cc)] border border-blue-300 dark:border-[rgba(6,182,212,0.22)] text-blue-700 dark:text-white font-medium text-sm transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_14px_50px_rgba(6,182,212,0.18)]">
-                      <Key className="w-4 h-4" />
-                      <span className="hidden sm:inline">Change Password</span>
-                      <span className="sm:hidden">Password</span>
-                    </button>
-
-                    {/* Logout - light red glass (soft, more contrast) */}
-                    <button onClick={() => {
-                      toast.custom((t) => (
-                        <div className="w-full max-w-sm bg-[rgba(0,0,0,0.8)] dark:bg-[rgba(0,0,0,0.85)] backdrop-blur-md border border-gray-700/40 rounded-lg p-4">
-                          <div className="text-sm font-semibold text-white mb-2">Logout?</div>
-                          <div className="flex gap-2 justify-end">
-                            <button onClick={() => toast.dismiss(t)} className="px-3 py-1.5 rounded text-xs bg-transparent text-white/80 border border-white/6">Cancel</button>
-                            <button onClick={async ()=>{ toast.dismiss(t); await auth.signOut(); window.location.href='/'; }} className="px-3 py-1.5 rounded text-xs bg-red-600 hover:bg-red-700 text-white">Logout</button>
-                          </div>
-                        </div>
-                      ), { duration: Infinity });
-                    }} className="flex items-center gap-2 px-4 py-3 md:px-5 md:py-2.5 rounded-lg bg-red-100 dark:bg-[linear-gradient(180deg,#fb7185cc,#ef4444cc)] border border-red-300 dark:border-[rgba(239,68,68,0.22)] text-red-700 dark:text-white font-medium text-sm transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_14px_50px_rgba(239,68,68,0.18)]">
-                      <LogOut className="w-4 h-4" />
-                      Logout
-                    </button>
-
-                    {/* Delete - dark red glass (stronger) */}
-                    <button onClick={handleDeleteAccount} className="ml-auto flex items-center gap-2 px-4 py-3 md:px-6 md:py-2.5 rounded-lg bg-red-600 dark:bg-[linear-gradient(180deg,#7f1d1dcc,#581217cc)] text-white font-semibold border border-red-700 dark:border-[rgba(185,28,28,0.24)] shadow-[0_20px_60px_rgba(220,38,38,0.3)] dark:shadow-[0_20px_60px_rgba(185,28,28,0.22)] transform transition duration-200 hover:-translate-y-1 hover:scale-105 hover:shadow-[0_28px_80px_rgba(185,28,28,0.32)]">
-                      <Trash2 className="w-4 h-4" />
-                      <span className="hidden sm:inline">Delete Account</span>
-                      <span className="sm:hidden">Delete</span>
-                    </button>
+                {/* Member Since */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Member Since</label>
+                  <div className="p-3 rounded-lg bg-accent/30 border border-transparent text-muted-foreground">
+                    {formatMemberSince(userDoc?.createdAt)}
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+
+            {/* Theme Settings */}
+            <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Monitor className="w-5 h-5 text-primary" />
+                Appearance
+              </h3>
+              <div className="bg-accent/20 p-2 rounded-xl inline-flex gap-2 overflow-x-auto max-w-full">
+                {[
+                  { id: 'light', icon: Sun, label: 'Light' },
+                  { id: 'dark', icon: Moon, label: 'Dark' },
+                  { id: 'system', icon: Monitor, label: 'System' }
+                ].map(({ id, icon: Icon, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => handleTheme(id)}
+                    disabled={themeLoading}
+                    className={`
+                      flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
+                      ${userDoc?.theme === id
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'}
+                    `}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>
+
+        {/* Progress Overview */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="p-5 md:p-8 rounded-3xl bg-card border border-border shadow-sm"
+        >
+          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <Award className="w-6 h-6 text-primary" />
+            Progress Overview
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'Tasks Created', value: totalTasks, icon: Check, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+              { label: 'Tasks Completed', value: completedTasks, icon: Award, color: 'text-green-500', bg: 'bg-green-500/10' },
+              { label: 'Notes Added', value: totalNotes, icon: Edit3, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+              { label: 'Current Streak', value: streak, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10' }
+            ].map((stat, i) => (
+              <div key={i} className="p-5 rounded-2xl bg-accent/20 border border-border/50 hover:border-border transition-colors">
+                <div className={`w-10 h-10 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center mb-3`}>
+                  <stat.icon className="w-5 h-5" />
+                </div>
+                <div className="text-3xl font-bold text-foreground mb-1">
+                  <CountUp value={stat.value || 0} />
+                </div>
+                <div className="text-sm text-muted-foreground font-medium">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Heatmap */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+              <Calendar className="w-4 h-4" />
+              Focus Activity
+            </div>
+
+            {/* New Heatmap Legend */}
+            <div className="mb-6 p-4 rounded-xl bg-accent/10 border border-border/50">
+              <div className="text-xs font-medium text-muted-foreground mb-3">Heatmap legend (tasks completed)</div>
+              <div className="w-full h-3 rounded-full bg-[linear-gradient(to_right,#ffffff,#86efac,#22c55e,#f59e0b,#ef4444,#b91c1c)] mb-2 shadow-inner"></div>
+              <div className="flex justify-between text-xs text-muted-foreground font-medium px-1">
+                <span>0</span>
+                <span>1-2</span>
+                <span>3-4</span>
+                <span>5-6</span>
+                <span>7-9</span>
+                <span>10+</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-2 text-center opacity-70">Color intensity shows number of tasks completed that day</div>
+            </div>
+
+            <div className="overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0">
+              <div className="min-w-[700px] h-[200px]">
+                <ResponsiveCalendar
+                  data={heatMapData}
+                  from={new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0]}
+                  to={new Date().toISOString().split('T')[0]}
+                  emptyColor={"var(--empty-cell-color)"}
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                  monthBorderColor="transparent"
+                  dayBorderWidth={1}
+                  dayBorderColor={"var(--cell-border-color)"}
+                  daySpacing={4}
+                  dayRadius={3}
+                  monthSpacing={12}
+                  monthLegendPosition="before"
+                  monthLegendOffset={10}
+                  square={true}
+                  theme={{
+                    textColor: 'var(--muted-foreground)',
+                    fontSize: 11,
+                    tooltip: {
+                      container: {
+                        background: 'var(--popover)',
+                        color: 'var(--popover-foreground)',
+                        fontSize: '12px',
+                        borderRadius: '6px',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                        border: '1px solid var(--border)'
+                      }
+                    }
+                  }}
+                  minValue={0}
+                  maxValue={10}
+                  colorScale={getHeatmapColor}
+                />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Account Actions */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col md:flex-row gap-4 justify-end pt-6 border-t border-border/50"
+        >
+          <button
+            onClick={sendPasswordReset}
+            className="group relative p-[2px] rounded-2xl overflow-hidden shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+          >
+            <div className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#3b82f6_0%,#06b6d4_50%,#3b82f6_100%)]" />
+            <div className="relative h-full w-full bg-white/90 dark:bg-gray-950/90 rounded-xl flex items-center justify-center gap-2 px-6 py-3 backdrop-blur-3xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <Key className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Change Password</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              toast.custom((t) => (
+                <div className="w-full max-w-sm bg-popover/95 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl ring-1 ring-black/5">
+                  <div className="text-lg font-semibold mb-2 text-foreground">Confirm Logout</div>
+                  <p className="text-sm text-muted-foreground mb-6">Are you sure you want to log out of your account?</p>
+                  <div className="flex gap-3 justify-end">
+                    <button onClick={() => toast.dismiss(t)} className="px-4 py-2 rounded-xl text-sm font-medium bg-muted hover:bg-muted/80 transition-colors">Cancel</button>
+                    <button onClick={async () => { toast.dismiss(t); await auth.signOut(); window.location.href = '/'; }} className="px-4 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20 transition-colors">Logout</button>
+                  </div>
+                </div>
+              ), { duration: Infinity });
+            }}
+            className="group relative p-[2px] rounded-2xl overflow-hidden shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+          >
+            <div className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#f97316_0%,#ec4899_50%,#f97316_100%)]" />
+            <div className="relative h-full w-full bg-white/90 dark:bg-gray-950/90 rounded-xl flex items-center justify-center gap-2 px-6 py-3 backdrop-blur-3xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <LogOut className="w-4 h-4 text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform duration-300" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Logout</span>
+            </div>
+          </button>
+
+          <button
+            onClick={handleDeleteAccount}
+            className="group relative p-[2px] rounded-2xl overflow-hidden shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+          >
+            <div className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#7f1d1d_0%,#ef4444_30%,#fbbf24_50%,#ef4444_70%,#7f1d1d_100%)]" />
+            <div className="relative h-full w-full bg-gradient-to-r from-red-500 to-red-600 rounded-xl flex items-center justify-center gap-2 px-6 py-3 text-white backdrop-blur-3xl">
+              <Trash2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
+              <span className="text-sm font-bold">Delete Account</span>
+            </div>
+          </button>
+        </motion.div>
+      </div >
+    </div >
   );
 }
