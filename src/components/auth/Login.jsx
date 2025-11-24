@@ -5,10 +5,12 @@ import { auth } from "../../lib/firebase";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [resetLoading, setResetLoading] = useState(false);
@@ -104,13 +106,20 @@ export default function Login() {
           </div>
           <div className="relative group">
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Password"
-              className="w-full px-3 sm:px-4 py-3 sm:py-3.5 bg-white/5 border border-white/15 rounded-lg text-sm sm:text-base placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 transition-all"
+              className="w-full px-3 sm:px-4 py-3 sm:py-3.5 bg-white/5 border border-white/15 rounded-lg text-sm sm:text-base placeholder-gray-400 text-white focus:outline-none focus:ring-2 focus:ring-purple-400/40 transition-all pr-10"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors focus:outline-none"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
           </div>
         </div>
 
