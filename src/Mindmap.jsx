@@ -15,14 +15,15 @@ export default function Mindmap({ tasks = [], toggleTask }) {
 
   const phrase = (phrases.find((p) => pct >= p.thresh) || phrases[phrases.length - 1]).text;
   const scrollRef = useRef(null);
-  const scrollBy = (delta) => scrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
 
   return (
     <div
-      className="w-full rounded-xl"
+      className="w-full rounded-xl overflow-hidden"
       style={{ background: "linear-gradient(180deg,#020617 0%, #071028 100%)" }}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 relative mindmap-container">
+
+        {/* RESPONSIVE FIXES */}
         <style>{`
           @keyframes neonPulse {
             0% { opacity: .35; box-shadow: 0 0 0 rgba(124,58,237,0.0);}
@@ -33,70 +34,91 @@ export default function Mindmap({ tasks = [], toggleTask }) {
           .card-neon { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
           .card-neon:hover { transform: translateY(-4px) scale(1.015); box-shadow: 0 8px 32px rgba(124,58,237,0.12), 0 0 20px rgba(6,182,212,0.06); border-color: rgba(124,58,237,0.28); }
 
-          /* Responsive fixes */
-          @media (max-width: 640px) {
+          /* TABLET */
+          @media (max-width: 820px) {
+            .mindmap-container { padding-left: 1rem !important; padding-right: 1rem !important; }
+            .card-neon { padding: 1rem 1.25rem !important; }
+          }
+
+          /* LARGE PHONES / SMALL TABLET */
+          @media (max-width: 650px) {
+            .mindmap-container { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
             .card-neon {
               flex-direction: column !important;
               align-items: flex-start !important;
-              text-align: left !important;
               gap: 0.75rem !important;
+              width: 100% !important;
+              max-width: 100% !important;
               padding: 1rem !important;
+              box-sizing: border-box !important;
             }
             .card-neon .flex-1 {
               width: 100% !important;
+              min-width: 0 !important; /* Allow truncation */
             }
             .card-neon .flex.items-center.gap-3 {
-              justify-content: space-between !important;
               width: 100% !important;
+              justify-content: space-between !important;
+              padding-top: 0.6rem;
+              border-top: 1px solid rgba(255,255,255,0.06);
             }
-            .text-sm { font-size: 0.9rem !important; }
-            .text-xs { font-size: 0.8rem !important; }
           }
 
-          @media (max-width: 420px) {
-            .card-neon { padding: 0.8rem !important; border-radius: 0.75rem !important; }
-            .w-10.h-10.rounded-lg { width: 1.8rem !important; height: 1.8rem !important; font-size: 0.8rem !important; }
-            .w-12.h-12.rounded-full { width: 2rem !important; height: 2rem !important; }
-            .text-sm { font-size: 0.85rem !important; }
+          /* MOBILE PORTRAIT */
+          @media (max-width: 480px) {
+            .mindmap-container { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+            .card-neon { padding: 0.875rem !important; border-radius: 0.75rem !important; }
+
+            .header-text h3 { font-size: 1.25rem !important; }
+            .header-text p {
+              font-size: 0.85rem !important;
+              white-space: normal !important;
+            }
+
+            .w-10.h-10.rounded-lg { width: 2.1rem !important; height: 2.1rem !important; }
+            .w-12.h-12.rounded-full { width: 2.6rem !important; height: 2.6rem !important; }
           }
 
+          /* ULTRA SMALL DEVICES */
           @media (max-width: 350px) {
-            .card-neon { padding: 0.6rem !important; }
-            .text-sm { font-size: 0.8rem !important; }
+            .mindmap-container { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+            .card-neon { padding: 0.75rem !important; }
+            .text-sm { font-size: 0.85rem !important; }
             .text-xs { font-size: 0.7rem !important; }
           }
         `}</style>
 
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <div className="flex-1 min-w-0">
+        {/* HEADER */}
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4 header-container">
+          <div className="flex-1 min-w-0 header-text">
             <h3
               style={{
                 background: "linear-gradient(90deg,#06b6d4,#7c3aed)",
                 WebkitBackgroundClip: "text",
                 color: "transparent",
               }}
-              className="text-2xl font-extrabold"
+              className="text-2xl font-extrabold truncate"
             >
               Tasks Flow
             </h3>
-            <p className="text-sm text-slate-400 mt-1">{phrase}</p>
+            <p className="text-sm text-slate-400 mt-1 truncate">{phrase}</p>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 header-stats">
             <div className="w-12 h-12 rounded-full bg-slate-800/40 flex items-center justify-center ring-1 ring-slate-700">
               <div className="text-sm font-semibold text-cyan-400">{pct}%</div>
             </div>
           </div>
         </div>
 
-        {/* Scrollable Content */}
+        {/* SCROLL AREA */}
         <div className="relative">
           <div
             ref={scrollRef}
-            className="overflow-y-auto max-h-[60vh] w-full pr-3 sm:pr-4 mindmap-scroll"
+            className="overflow-y-auto max-h-[60vh] w-full pr-3 sm:pr-4"
           >
             <div className="flex flex-col items-center gap-8">
+
               {layout.length === 0 && (
                 <div className="p-6 text-center text-sm text-slate-400">
                   No tasks yet — create some on the dashboard to see them here.
@@ -115,15 +137,13 @@ export default function Mindmap({ tasks = [], toggleTask }) {
                         opacity: 0.6,
                         borderRadius: 2,
                         marginBottom: 8,
-                        boxShadow: "0 6px 18px rgba(124,58,237,0.06)",
                       }}
                     />
                   )}
 
                   <button
                     onClick={() => toggleTask(n.id, n.status !== "done")}
-                    title={n.title}
-                    className="card-neon w-full px-5 py-4 sm:px-6 sm:py-4 rounded-2xl relative flex items-start justify-between cursor-pointer outline-none gap-4"
+                    className="card-neon w-full px-5 py-4 sm:px-6 sm:py-4 rounded-2xl relative flex items-start justify-between gap-4 cursor-pointer"
                     style={{
                       background:
                         n.status === "done"
@@ -155,6 +175,7 @@ export default function Mindmap({ tasks = [], toggleTask }) {
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

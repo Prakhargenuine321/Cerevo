@@ -336,14 +336,14 @@ async function storage_list() {
     console.log(`storage_list: Fetching tasks for user ${currentUser.uid}`);
     const tasksRef = collection(db, "users", currentUser.uid, "tasks");
     const snap = await getDocs(tasksRef);
-      const tasks = snap.docs.map(doc => ({
-        // Ensure the authoritative Firestore document id is used as `id`.
-        // Put doc.data() first, then override/add the id field with doc.id so
-        // any `id` stored inside the document data doesn't replace the
-        // real document id (which previously caused duplicate-upserts).
-        ...doc.data(),
-        id: doc.id,
-      }));
+    const tasks = snap.docs.map(doc => ({
+      // Ensure the authoritative Firestore document id is used as `id`.
+      // Put doc.data() first, then override/add the id field with doc.id so
+      // any `id` stored inside the document data doesn't replace the
+      // real document id (which previously caused duplicate-upserts).
+      ...doc.data(),
+      id: doc.id,
+    }));
     console.log(`storage_list: Successfully fetched ${tasks.length} tasks:`, tasks);
     return tasks;
   } catch (err) {
@@ -355,7 +355,7 @@ async function storage_list() {
     });
     toast.error(`Failed to load tasks: ${err.message}`);
   }
-  
+
   return [];
 }
 
@@ -401,11 +401,11 @@ async function storage_update(id, patch) {
       throw new Error('No authenticated user for update');
     }
     console.log(`storage_update: Updating task ${id} for user ${currentUser.uid}:`, patch);
-  const taskRef = doc(db, "users", currentUser.uid, "tasks", id);
-  // Use setDoc with merge to avoid failures when the document doesn't exist
-  // and to ensure partial updates are applied.
-  await setDoc(taskRef, patch, { merge: true });
-  console.log(`storage_update: Task ${id} upserted (set with merge) successfully`);
+    const taskRef = doc(db, "users", currentUser.uid, "tasks", id);
+    // Use setDoc with merge to avoid failures when the document doesn't exist
+    // and to ensure partial updates are applied.
+    await setDoc(taskRef, patch, { merge: true });
+    console.log(`storage_update: Task ${id} upserted (set with merge) successfully`);
     return;
   } catch (err) {
     console.error('storage_update ERROR:', {
@@ -425,15 +425,15 @@ async function storage_delete(id) {
     console.log('=== storage_delete START ===');
     const currentUser = auth.currentUser;
     console.log('Current user:', currentUser?.uid);
-    
+
     if (!currentUser) {
       throw new Error('No authenticated user for delete');
     }
-    
+
     console.log(`storage_delete: Deleting task ${id} for user ${currentUser.uid}`);
     const taskRef = doc(db, "users", currentUser.uid, "tasks", id);
     console.log('Task ref path:', `users/${currentUser.uid}/tasks/${id}`);
-    
+
     await deleteDoc(taskRef);
     console.log(`storage_delete: Task ${id} deleted successfully from Firebase`);
     console.log('=== storage_delete SUCCESS ===');
@@ -444,7 +444,7 @@ async function storage_delete(id) {
     console.error('Error message:', err.message);
     console.error('Error stack:', err.stack);
     console.error('Full error object:', err);
-    
+
     toast.error(`Failed to delete task: ${err.message}`);
     throw err;
   }
@@ -525,57 +525,57 @@ export default function GATEDashboard() {
   // Fetch current user's exam from Firestore `users` collection and update header
 
 
- useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-    if (!firebaseUser) {
-      setUser(null);
-      setAuthLoading(false);
-      return;
-    }
-
-    try {
-      // Ensure user document exists in Firestore (required for subcollections)
-      const userRef = doc(db, "users", firebaseUser.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        // Create default user document if it doesn't exist
-        console.log("Creating new user document for:", firebaseUser.uid);
-        await setDoc(userRef, {
-          exam: "GATE",
-          createdAt: new Date().toISOString(),
-        });
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser(null);
+        setAuthLoading(false);
+        return;
       }
-      
-      const data = userSnap.exists() ? userSnap.data() : { exam: "GATE", createdAt: new Date().toISOString() };
-      console.log("User data:", data);
-      
-      // Update subjects based on user's exam type
-      const examType = data.exam || "GATE";
-      const updatedSubjects = getSubjectsForExam(examType);
-      setSubjects(updatedSubjects);
-      SUBJECTS = updatedSubjects;
-      console.log(`Updated SUBJECTS for exam type: ${examType}`, updatedSubjects);
-      
-      setUser({ id: firebaseUser.uid, ...data });
-      
-      // After we establish the authenticated user, refresh tasks from Firestore
-      // so the UI reflects the user's tasks immediately after sign-in.
+
       try {
-        await refreshTasksFromStorage();
-      } catch (e) {
-        console.error('Failed to refresh tasks after auth change', e);
-      }
-    } catch (err) {
-      console.error("Error in auth state change:", err);
-      setUser(null);
-    } finally {
-      setAuthLoading(false);
-    }
-  });
+        // Ensure user document exists in Firestore (required for subcollections)
+        const userRef = doc(db, "users", firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
 
-  return () => unsubscribe();
-}, []);
+        if (!userSnap.exists()) {
+          // Create default user document if it doesn't exist
+          console.log("Creating new user document for:", firebaseUser.uid);
+          await setDoc(userRef, {
+            exam: "GATE",
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        const data = userSnap.exists() ? userSnap.data() : { exam: "GATE", createdAt: new Date().toISOString() };
+        console.log("User data:", data);
+
+        // Update subjects based on user's exam type
+        const examType = data.exam || "GATE";
+        const updatedSubjects = getSubjectsForExam(examType);
+        setSubjects(updatedSubjects);
+        SUBJECTS = updatedSubjects;
+        console.log(`Updated SUBJECTS for exam type: ${examType}`, updatedSubjects);
+
+        setUser({ id: firebaseUser.uid, ...data });
+
+        // After we establish the authenticated user, refresh tasks from Firestore
+        // so the UI reflects the user's tasks immediately after sign-in.
+        try {
+          await refreshTasksFromStorage();
+        } catch (e) {
+          console.error('Failed to refresh tasks after auth change', e);
+        }
+      } catch (err) {
+        console.error("Error in auth state change:", err);
+        setUser(null);
+      } finally {
+        setAuthLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
 
   // useEffect(() => {
@@ -747,7 +747,7 @@ export default function GATEDashboard() {
         // ignore
       }
       // Clear stored id state
-      try { setSavingToastId(null); } catch (e) {}
+      try { setSavingToastId(null); } catch (e) { }
     }
     // optimistic UI update first
     setTasks((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -785,7 +785,7 @@ export default function GATEDashboard() {
             <div className="text-popover-foreground text-xs mt-1">This task was marked done more than 6 hours ago and cannot be unmarked.</div>
           </div>
         ),
-        { duration: 6000 }
+        { duration: 3000 }
       );
       return;
     }
@@ -819,7 +819,7 @@ export default function GATEDashboard() {
       );
       return;
     }
-    
+
     // Show confirmation dialog with buttons
     const confirmed = await new Promise((resolve) => {
       console.log('Showing confirmation toast...');
@@ -1213,7 +1213,7 @@ export default function GATEDashboard() {
   const year = examDateObj ? examDateObj.getFullYear() : "----";
   const monthName = examDateObj ? monthNames[examDateObj.getMonth()] : "";
 
-//Logic for timer countdown
+  //Logic for timer countdown
 
   useEffect(() => {
     // Depend on the raw exam date string and createdAt string (primitives) to avoid
@@ -1244,8 +1244,8 @@ export default function GATEDashboard() {
     return () => clearInterval(timer);
   }, [rawExamDate]);
 
-if (authLoading) return <LoadingSpinner />;
-if (user === null) return <LoginPrompt />;
+  if (authLoading) return <LoadingSpinner />;
+  if (user === null) return <LoginPrompt />;
 
 
   return (
@@ -1256,7 +1256,7 @@ if (user === null) return <LoginPrompt />;
           <div className="flex-1">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">{user?.exam?.toUpperCase?.() || "_"} Prep Dashboard</h1>
             <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mt-1">
-              <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> 
+              <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               {humanDate(today)} • {user?.name || "Guest"}
             </p>
           </div>
@@ -1292,7 +1292,7 @@ if (user === null) return <LoginPrompt />;
                   <Rocket className="h-4 w-4 hidden xs:inline-block" /> Mindmap
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-[95vw] sm:max-w-5xl md:max-w-6xl">
+              <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] sm:w-[90%] sm:max-w-5xl md:max-w-6xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
                 <DialogHeader>
                   <DialogTitle>Tasks Mindmap</DialogTitle>
                 </DialogHeader>
@@ -1575,7 +1575,7 @@ if (user === null) return <LoginPrompt />;
               {/* Journey Progress */}
               <div className="flex flex-col items-center justify-center gap-2 my-4">
                 <div className="w-48 h-1.5 bg-muted/30 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-linear-to-r from-primary/40 to-primary transition-all duration-500 ease-out"
                     style={{ width: `${journeyProgress}%` }}
                   />
@@ -1773,86 +1773,59 @@ if (user === null) return <LoginPrompt />;
                   <ul className="divide-y divide-border">
                     {filteredTasks.map((t) => (
                       <li key={t.id} className="py-3 px-3 -mx-3 first:rounded-t-lg last:rounded-b-lg border-b border-border last:border-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="pt-0.5">
-                            {savingTask === t.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                            ) : (
-                              <Checkbox
-                                checked={t.status === "done"}
-                                onCheckedChange={(v) => handleToggle(t, !!v)}
-                                disabled={savingTask === t.id}
-                              />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className={`font-medium truncate ${t.status === "done" ? "text-muted-foreground line-through" : ""}`}>
-                              {t.title}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="pt-0.5">
+                              {savingTask === t.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                              ) : (
+                                <Checkbox
+                                  checked={t.status === "done"}
+                                  onCheckedChange={(v) => handleToggle(t, !!v)}
+                                  disabled={savingTask === t.id}
+                                />
+                              )}
                             </div>
-                            <div className="text-xs text-muted-foreground flex items-center flex-wrap gap-2 mt-0.5">
-                              {t.subject ? <Badge variant="secondary">{t.subject}</Badge> : null}
-                              {t.estimatedMinutes ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Timer className="h-3 w-3" />{t.estimatedMinutes}m
-                                </span>
-                              ) : null}
-                              {t.link ? (
-                                <button
-                                  className="inline-flex items-center gap-1 hover:text-foreground transition-colors bg-transparent border-0 p-0"
-                                  onClick={() => {
-                                    if (isYouTubeLink(t.link)) {
-                                      window.location.href = `/player?taskId=${t.id}`;
-                                    } else {
-                                      window.open(t.link, '_blank');
-                                    }
-                                  }}
-                                >
-                                  <LinkIcon className="h-3 w-3" /> Open
-                                </button>
+                            <div className="min-w-0">
+                              <div className={`font-medium truncate ${t.status === "done" ? "text-muted-foreground line-through" : ""}`}>
+                                {t.title}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center flex-wrap gap-2 mt-0.5">
+                                {t.subject ? <Badge variant="secondary">{t.subject}</Badge> : null}
+                                {t.estimatedMinutes ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Timer className="h-3 w-3" />{t.estimatedMinutes}m
+                                  </span>
+                                ) : null}
+                                {t.link ? (
+                                  <button
+                                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors bg-transparent border-0 p-0"
+                                    onClick={() => {
+                                      if (isYouTubeLink(t.link)) {
+                                        window.location.href = `/player?taskId=${t.id}`;
+                                      } else {
+                                        window.open(t.link, '_blank');
+                                      }
+                                    }}
+                                  >
+                                    <LinkIcon className="h-3 w-3" /> Open
+                                  </button>
+                                ) : null}
+                              </div>
+                              {t.description ? (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>
                               ) : null}
                             </div>
-                            {t.description ? (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>
-                            ) : null}
                           </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => startEditing(t)}
-                            disabled={isTaskLockedByTime(t)}
-                            title={isTaskLockedByTime(t) ? 'Cannot edit task after 6 hours of completion' : undefined}
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="text-muted-foreground hover:text-primary transition-colors"
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => startEditing(t)}
+                              disabled={isTaskLockedByTime(t)}
+                              title={isTaskLockedByTime(t) ? 'Cannot edit task after 6 hours of completion' : undefined}
                             >
-                              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                              <path d="m15 5 4 4" />
-                            </svg>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => deleteTask(t.id, t.title)}
-                            disabled={isDeleting === t.id || isTaskLockedByTime(t)}
-                            title={isTaskLockedByTime(t) ? 'Cannot delete task after 6 hours of completion' : undefined}
-                          >
-                            {isDeleting === t.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                            ) : (
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="14"
@@ -1863,24 +1836,51 @@ if (user === null) return <LoginPrompt />;
                                 strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="text-muted-foreground hover:text-destructive transition-colors"
+                                className="text-muted-foreground hover:text-primary transition-colors"
                               >
-                                <path d="M3 6h18" />
-                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                <path d="m15 5 4 4" />
                               </svg>
-                            )}
-                          </Button>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => deleteTask(t.id, t.title)}
+                              disabled={isDeleting === t.id || isTaskLockedByTime(t)}
+                              title={isTaskLockedByTime(t) ? 'Cannot delete task after 6 hours of completion' : undefined}
+                            >
+                              {isDeleting === t.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                              ) : (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <path d="M3 6h18" />
+                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                </svg>
+                              )}
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </li>
-    ))}
+                      </li>
+                    ))}
 
-  </ul>
+                  </ul>
 
-  </div>
+                </div>
 
-)}
+              )}
             </CardContent>
           </Card>
 
@@ -1915,7 +1915,7 @@ if (user === null) return <LoginPrompt />;
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" /> Study Contributions
               </CardTitle>
-              <div className="flex items-center gap-1.5 text-xs text-[#24292f] dark:text-[#7d8590] font-medium">
+              {/* <div className="flex items-center gap-1.5 text-xs text-[#24292f] dark:text-[#7d8590] font-medium">
                 <span>Less</span>
                 <div className="flex gap-1">
                   <div className="w-2.5 h-2.5 rounded-sm bg-[#ebedf0] dark:bg-[#161b22] border border-[#0000001a] dark:border-[#ffffff1a]"></div>
@@ -1925,7 +1925,7 @@ if (user === null) return <LoginPrompt />;
                   <div className="w-2.5 h-2.5 rounded-sm bg-[#216e39] dark:bg-[#0d4429] border border-[#0000001a] dark:border-[#ffffff1a]"></div>
                 </div>
                 <span>More</span>
-              </div>
+              </div> */}
             </div>
           </CardHeader>
           <CardContent className="py-6">

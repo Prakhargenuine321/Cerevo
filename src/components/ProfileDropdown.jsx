@@ -9,13 +9,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase";
-import { signOut } from "firebase/auth";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 
 export default function ProfileDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [user, setUser] = useState(auth.currentUser);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     try {
@@ -35,9 +43,10 @@ export default function ProfileDropdown() {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  const user = auth.currentUser;
+  // const user = auth.currentUser; // Removed direct access
   const userName = user?.displayName || user?.email?.split("@")[0] || "User";
   const userInitial = userName.charAt(0).toUpperCase();
+  const photoURL = user?.photoURL;
 
   const navigate = useNavigate();
 
@@ -88,27 +97,45 @@ export default function ProfileDropdown() {
             relative h-9 w-9 rounded-full
             bg-gradient-to-br from-gray-200/30 to-gray-400/20 dark:from-gray-800/30 dark:to-gray-900/20
             text-gray-900 dark:text-gray-100 font-semibold flex items-center justify-center
-            border border-emerald-400/70
+            border border-sky-400/70
             backdrop-blur-xl
-            shadow-[0_0_15px_rgba(34,197,94,0.3)]
-            hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]
+            shadow-[0_0_15px_rgba(56,189,248,0.3)]
+            hover:shadow-[0_0_25px_rgba(56,189,248,0.6)]
             transition-all duration-500
-            animate-[pulse-green_2.5s_ease-in-out_infinite]
+            animate-[pulse-blue_2.5s_ease-in-out_infinite]
           `}
           title={`${userName}`}
         >
-          {userInitial}
+          {/* Subtle Sparkles */}
+          <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
+            <div className="absolute top-[15%] left-[15%] w-0.5 h-0.5 bg-white rounded-full shadow-[0_0_2px_white] animate-[sparkle_2s_ease-in-out_infinite]" />
+            <div className="absolute bottom-[20%] right-[20%] w-0.5 h-0.5 bg-sky-200 rounded-full shadow-[0_0_2px_currentColor] animate-[sparkle_3s_ease-in-out_infinite_1s]" />
+            <div className="absolute top-[20%] right-[15%] w-[1px] h-[1px] bg-white rounded-full animate-[sparkle_2.5s_ease-in-out_infinite_0.5s]" />
+          </div>
+          {photoURL ? (
+            <img
+              src={photoURL}
+              alt={userName}
+              className="w-full h-full rounded-full object-cover"
+            />
+          ) : (
+            userInitial
+          )}
           <style>{`
-            @keyframes pulse-green {
+            @keyframes pulse-blue {
               0% {
-                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+                box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5);
               }
               50% {
-                box-shadow: 0 0 12px 4px rgba(34, 197, 94, 0.8);
+                box-shadow: 0 0 12px 4px rgba(56, 189, 248, 0.8);
               }
               100% {
-                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+                box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5);
               }
+            }
+            @keyframes sparkle {
+              0%, 100% { opacity: 0; transform: scale(0); }
+              50% { opacity: 1; transform: scale(1); }
             }
           `}</style>
         </Button>
@@ -119,10 +146,9 @@ export default function ProfileDropdown() {
         className={`
           w-56 p-0 border rounded-2xl overflow-hidden
           backdrop-blur-2xl backdrop-saturate-150
-          ${
-            isDark
-              ? "bg-[rgba(25,25,25,0.35)] border-[rgba(255,255,255,0.08)] shadow-[0_8px_30px_rgba(0,0,0,0.8)]"
-              : "bg-[rgba(255,255,255,0.25)] border-[rgba(255,255,255,0.25)] shadow-[0_8px_30px_rgba(0,0,0,0.2)]"
+          ${isDark
+            ? "bg-[rgba(25,25,25,0.35)] border-[rgba(255,255,255,0.08)] shadow-[0_8px_30px_rgba(0,0,0,0.8)]"
+            : "bg-[rgba(255,255,255,0.25)] border-[rgba(255,255,255,0.25)] shadow-[0_8px_30px_rgba(0,0,0,0.2)]"
           }
           transition-all duration-300
           backdrop-filter
@@ -136,10 +162,9 @@ export default function ProfileDropdown() {
         <div
           className={`
             px-4 py-3 border-b
-            ${
-              isDark
-                ? "bg-[rgba(40,40,40,0.3)] border-[rgba(255,255,255,0.08)]"
-                : "bg-[rgba(255,255,255,0.25)] border-[rgba(255,255,255,0.25)]"
+            ${isDark
+              ? "bg-[rgba(40,40,40,0.3)] border-[rgba(255,255,255,0.08)]"
+              : "bg-[rgba(255,255,255,0.25)] border-[rgba(255,255,255,0.25)]"
             }
             backdrop-blur-md
           `}
@@ -150,10 +175,18 @@ export default function ProfileDropdown() {
                 w-10 h-10 rounded-full bg-[rgba(255,255,255,0.25)] dark:bg-[rgba(60,60,60,0.5)]
                 flex items-center justify-center text-gray-900 dark:text-gray-100 font-semibold
                 border border-[rgba(255,255,255,0.3)] dark:border-[rgba(255,255,255,0.15)]
-                shadow-inner backdrop-blur-md
+                shadow-inner backdrop-blur-md overflow-hidden
               "
             >
-              {userInitial}
+              {photoURL ? (
+                <img
+                  src={photoURL}
+                  alt={userName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                userInitial
+              )}
             </div>
             <div className="min-w-0">
               <p className={`text-sm font-semibold truncate ${isDark ? "text-gray-100" : "text-gray-800"}`}>
@@ -171,10 +204,9 @@ export default function ProfileDropdown() {
             className={`
               px-4 py-2.5 text-sm cursor-pointer rounded-none
               flex items-center gap-3
-              ${
-                isDark
-                  ? "hover:bg-[rgba(80,80,80,0.4)] text-gray-100"
-                  : "hover:bg-[rgba(255,255,255,0.4)] text-gray-900"
+              ${isDark
+                ? "hover:bg-[rgba(80,80,80,0.4)] text-gray-100"
+                : "hover:bg-[rgba(255,255,255,0.4)] text-gray-900"
               }
               transition-colors duration-200
             `}
@@ -185,9 +217,8 @@ export default function ProfileDropdown() {
         </div>
 
         <DropdownMenuSeparator
-          className={`my-1 h-px ${
-            isDark ? "bg-[rgba(255,255,255,0.1)]" : "bg-[rgba(0,0,0,0.1)]"
-          }`}
+          className={`my-1 h-px ${isDark ? "bg-[rgba(255,255,255,0.1)]" : "bg-[rgba(0,0,0,0.1)]"
+            }`}
         />
 
         {/* Logout */}
@@ -197,10 +228,9 @@ export default function ProfileDropdown() {
             className={`
               px-4 py-2.5 text-sm cursor-pointer rounded-none
               flex items-center gap-3
-              ${
-                isDark
-                  ? "hover:bg-[rgba(120,0,0,0.3)] text-red-300 hover:text-red-200"
-                  : "hover:bg-[rgba(255,0,0,0.15)] text-red-600 hover:text-red-700"
+              ${isDark
+                ? "hover:bg-[rgba(120,0,0,0.3)] text-red-300 hover:text-red-200"
+                : "hover:bg-[rgba(255,0,0,0.15)] text-red-600 hover:text-red-700"
               }
               transition-colors duration-200
             `}

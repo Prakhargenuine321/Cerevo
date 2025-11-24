@@ -225,18 +225,38 @@ export default function ProfilePage() {
 
   const uploadPicture = async (file) => {
     if (!file) return;
+
+    // Validation
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (JPEG, PNG, WebP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size should be less than 5MB');
+      return;
+    }
+
     try {
-      toast('Uploading...');
+      toast.info('Uploading...', { id: 'upload-toast' });
       const sref = storageRef(storage, `users/${uid}/profile.jpg`);
       await uploadBytes(sref, file);
       const url = await getDownloadURL(sref);
+
+      // Update Firestore
       const dref = doc(db, 'users', uid);
       await updateDoc(dref, { photoURL: url });
+
+      // Update Auth Profile
+      if (auth.currentUser) {
+        const { updateProfile } = await import('firebase/auth');
+        await updateProfile(auth.currentUser, { photoURL: url });
+      }
+
       setUserDoc(prev => ({ ...prev, photoURL: url }));
-      toast.success('Profile picture updated');
+      toast.success('Profile picture updated', { id: 'upload-toast' });
     } catch (err) {
       console.error('Upload failed', err);
-      toast.error('Upload failed');
+      toast.error('Upload failed: ' + err.message, { id: 'upload-toast' });
     }
   };
 
